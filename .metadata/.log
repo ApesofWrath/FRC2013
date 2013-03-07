@@ -1,0 +1,31 @@
+!SESSION 2013-02-07 15:44:06.640 -----------------------------------------------
+eclipse.buildId=20080514-1211
+java.version=1.5.0_11
+java.vendor=Sun Microsystems Inc.
+BootLoader constants: OS=win32, ARCH=x86, WS=win32, NL=en_US
+Command-line arguments:  -os win32 -ws win32 -arch x86
+
+!ENTRY com.windriver.ide.target 1 0 2013-02-07 15:45:16.734
+!MESSAGE C:\WindRiver\workbench-3.0\dfw\0199bb\x86-win32\bin\dfwserver.exe  -protocol mi -io sockets -useregistry -session dfw-wb301-Programming-0 -registryhost localhost
+
+!ENTRY com.windriver.ide.target 1 0 2013-02-07 15:45:17.578
+!MESSAGE Connected to dfwserver at 127.0.0.1, 127.0.0.1:1944, PID=1076, Session="dfw-wb301-Programming-0"
+!SESSION 2013-02-07 16:19:01.890 -----------------------------------------------
+eclipse.buildId=20080514-1211
+java.version=1.5.0_11
+java.vendor=Sun Microsystems Inc.
+BootLoader constants: OS=win32, ARCH=x86, WS=win32, NL=en_US
+Command-line arguments:  -os win32 -ws win32 -arch x86
+
+!ENTRY com.windriver.ide.target 1 0 2013-02-07 16:19:09.234
+!MESSAGE C:\WindRiver\workbench-3.0\dfw\0199bb\x86-win32\bin\dfwserver.exe  -protocol mi -io sockets -useregistry -session dfw-wb301-Programming -registryhost localhost
+
+!ENTRY com.windriver.ide.target 1 0 2013-02-07 16:19:09.562
+!MESSAGE Connected to dfwserver at 127.0.0.1, 127.0.0.1:3977, PID=3368, Session="dfw-wb301-Programming"
+
+!ENTRY org.eclipse.ui.ide 4 4 2013-02-07 16:19:54.515
+!MESSAGE The file 'AUTOEXEC.BAT' could not be opened.
+See log for details.
+
+!ENTRY org.eclipse.ui 4 0 2013-02-07 16:19:54.515
+!MESSAGE Unable to open external editor for C:/AUTOEXEC.BAT.

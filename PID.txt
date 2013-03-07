@@ -1,0 +1,117 @@
+
+
+// Working values for HOMEBREWPID:
+//P: 0.070
+//I: 0.00
+//D: ~0.500
+//SampleRate: 0.729
+//SampleRate (s): .729 / 5 * (1.0 - 0.001) + 0.001 = .1467 seconds
+
+#define MAX_RPM 5000.0
+
+// Place in class
+Timer *RPMTimer;
+Encoder *encoderShooterMotor;
+Timer *PIDTimer;
+Timer *PIDSampleTimer;
+DriverStation *ds;
+// the following variables must be global so that they can be seen in a different function
+float error, accumerror;
+float P, I, D, F;
+int prevEnc;
+double prevTime;
+double kP, kI, kD, kF, sampleRate;
+int rpm;
+
+// Place in RobotDemo()
+ds = DriverStation::GetInstance();
+
+// Place in OperatorControl()
+encoderShooterMotor->Start();
+// This does not necessarily need to be set.
+// It is for encoder->GetRate(), but it has always read 0 for us
+encoderShooterMotor->SetDistancePerPulse(60/128*(60/24));
+float p, oldp;
+
+
+// place following code in Teleop loop
+kP = ds->GetAnalogIn(1);
+kI = ds->GetAnalogIn(2);
+kD = ds->GetAnalogIn(3);
+sampleRate = ds->GetAnalogIn(4);
+// This code scales the DriverStation analog in from 0.0 to 5.0 to 1 ms (.001s) to 1s
+sampleRate = sampleRate / 5;
+sampleRate = sampleRate * (1.0 - 0.001) + 0.001;
+
+
+if (PIDSampleTimer->Get() > sampleRate) {
+	PIDSampleTimer->Reset();
+	oldp = p;
+	
+	// remove the negative here if your motors run form 0.0 to 1.0, leave if they are 0.0 to -1.0
+	float target = -(DriveStickL->GetThrottle()-1)/2;
+	printf("Target RPM: %f\nTarget: %f%%", target*MAX_RPM, target);
+
+	// remove the negative here if your motors run form 0.0 to 1.0, leave if they are 0.0 to -1.0
+	p = -PID(MAX_RPM * target);
+	//Uncomment this to see when the PID goes negative
+	/*if (oldp/p < 0)
+	{
+		printf("switch\n");
+	}*/
+	printf("\nPID=%1.4f\n", p);
+	printf("P: %f, I: %f, D: %f\n", P, I, D);
+	printf("Error: %f\n", error);
+	printf("\nMotor RPM =%7lf\n", (double)rpm);
+	printf("Motor Speed: %f\n", ShooterMotorLeft->Get());
+
+	// Make sure to have the adition or the motor will have erratic behavior
+	// we don't have to use the left motor here, we just need on of the motors
+	// They should be the same speed
+	ShooterMotorSpeed(p + ShooterMotorLeft->Get());
+} // End Teleop loop code
+
+
+
+
+void ShooterMotorSpeed(float desiredspeed) {
+	ShooterMotorLeft->Set(desiredspeed);
+	ShooterMotorRight->Set(desiredspeed);
+}
+
+int getShooterWheelRPM() {
+	double time = RPMTimer->Get() - prevTime;
+	int ticks = encoderShooterMotor->Get() - prevEnc;
+	prevEnc = encoderShooterMotor->Get();
+	prevTime = RPMTimer->Get();
+	// Tune this to what your setup is
+	// 60 = seconds to minutes conversion (RPM, not RPS)
+	// 128 =  steps in one revolution for encoder
+	// 60/24 = gear ratio (we have a 60 tooth gear on the encoder and a 24 tooth gear on the wheel)
+	return (int)((ticks / time)*60.0/128.0*(60.0/24.0));
+}
+
+float PID(float setpoint) {
+	// The argument is passed in as RPM, we need it from -1.0 to 1.0
+	setpoint /= MAX_RPM;
+	
+	float preverror = error;
+	//Always returns 0
+	//float current = encoderShooterMotor->GetRate() / MAX_RPM;
+	rpm = getShooterWheelRPM();
+	float current = rpm / MAX_RPM;
+	float dt = PIDTimer->Get();
+	PIDTimer->Reset();
+	error = setpoint - current;
+	accumerror += error * dt;
+	P = kP * error;
+	I = kI * accumerror;
+	D = kD * (error-preverror) / dt;
+	F = kF * setpoint;
+	float out = P + I + D + F;
+	if (out> 1.0)
+		out = 1.0;
+	if (out < -1)
+		out = -1;
+	return out;
+}

@@ -1,0 +1,902 @@
+#include "WPILib.h"
+#include "Vision/RGBImage.h"
+#include "Vision/BinaryImage.h"
+#include "Math.h"
+/*
+ * Drive program for 2013 team 668 kit bot
+ * */
+
+//Camera constants used for distance calculation
+#define X_IMAGE_RES 320		//X Image resolution in pixels, should be 160, 320 or 640
+//#define VIEW_ANGLE 48		//Axis 206 camera
+#define VIEW_ANGLE 43.5  //Axis M1011 camera
+//Using M10011 Camera FRC 2013
+#define PI 3.1415926535897932384626433832795028841971
+
+//Score limits used for target identification
+#define RECTANGULARITY_LIMIT 60
+#define ASPECT_RATIO_LIMIT 75
+#define X_EDGE_LIMIT 40
+#define Y_EDGE_LIMIT 60
+
+//Minimum area of particles to be considered
+#define AREA_MINIMUM 500
+
+//Edge profile constants used for hollowness score calculation
+#define XMAXSIZE 24
+#define XMINSIZE 24
+#define YMAXSIZE 24
+#define YMINSIZE 48
+const double xMax[XMAXSIZE] =
+{ 1, 1, 1, 1, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5,
+		1, 1, 1, 1 };
+const double xMin[XMINSIZE] =
+{ .4, .6, .1, .1, .1, .1, .1, .1, .1, .1, .1, .1, .1, .1, .1, .1, .1, .1, .1,
+		.1, .1, .1, 0.6, 0 };
+const double yMax[YMAXSIZE] =
+{ 1, 1, 1, 1, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5,
+		1, 1, 1, 1 };
+const double yMin[YMINSIZE] =
+{ .4, .6, .05, .05, .05, .05, .05, .05, .05, .05, .05, .05, .05, .05, .05, .05,
+		.05, .05, .05, .05, .05, .05, .05, .05, .05, .05, .05, .05, .05, .05,
+		.05, .05, .05, .05, .05, .05, .05, .05, .05, .05, .05, .05, .05, .05,
+		.05, .05, .6, 0 };
+
+// used to control how often (how many loops) prints happen:
+#define PRINTRATE (100)
+
+#define BOTDRIVE
+#define PRINT
+#define TIMERS
+#define ENCODERS
+#define VISIONSYSTEM
+#define SHIFTERS
+//#define HOMEBREWPID
+//#define WPILIBPID
+#define DS
+#define OPTICAL_SENSOR_TEST
+//#define CAMERA
+
+// This is here so that if we need to change the motor controllers easily, we can
+#if 0
+#define MOTOR_CONTROLLER Talon
+#else
+#define MOTOR_CONTROLLER Victor
+#endif
+// We are doing this so that if the Optical sensor outputs are inverted, then
+// we don't have to switch all of the occurrences of these calls
+#define FIRST_OPTICAL_SENSOR_VALUE  (!FirstOpticalSensor->Get())
+#define SECOND_OPTICAL_SENSOR_VALUE (!SecondOpticalSensor->Get())
+
+#define SHIFT_UP_STATE 1
+
+// here are the solenoid port defines
+#define SHIFT_OUT		1
+#define SHIFT_IN		2
+#define LIFTER_SHIFT_IN		3
+#define LIFTER_SHIFT_OUT	4
+#define LOADER_SHIFT_IN		5
+#define LOADER_SHIFT_OUT	6
+
+// Here is the definition of all of the PWM's
+#define SHOOTER_MOTOR_LIFT	3
+#define SHOOTER_MOTOR_SHOOT	4
+
+// F=front, B=back, L=left, R=right
+#define DRIVE_MOTOR_F_L		2
+#define DRIVE_MOTOR_B_L		1
+#define DRIVE_MOTOR_F_R		6
+#define DRIVE_MOTOR_B_R		5
+
+// here is the definition of all of the Digital IO's
+#define FIRST_OPTICAL_SENSOR	13
+#define SECOND_OPTICAL_SENSOR	14
+
+#define RIGHT_ENCODER_1		10
+#define RIGHT_ENCODER_2		12
+#define LEFT_ENCODER_1		9
+#define LEFT_ENCODER_2		7
+
+#define PRESSURE_SWITCH     4
+
+//hereis where the relays are defined
+#define COMPRESSOR_RELAY    1
+
+// here is where the defines go for buttons
+//Drive Stick Left
+#define DISC_TIMER_RESET	1
+
+#define SHIFT_UP_BUTTON		2
+#define SHIFT_DOWN_BUTTON	3
+
+#define ARCADE_BUTTON		4
+#define TANK_BUTTON			5
+
+//Drive Stick Right
+
+// Shooter Stick
+#define SHOOTER_ON			3
+#define SHOOTER_OFF			2
+
+#if defined(HOMEBREWPID) || defined (WPILIBPID)
+#define kP DriveStickL
+#define kI DriveStickR
+#define kD ShooterStick
+#define kF 1
+#endif
+
+#define INpS_TO_FpS(a) ((a)*12)
+#define INpS_TO_MIpFN(a) ((a)*5280*12/(3600*60*24*14))
+
+#ifdef FORTNIGHT
+#define CONVERT(a) (INpS_TO_MIpFN(a))
+#else
+#define CONVERT(a) (INpS_TO_FpS(a))
+#endif
+
+#define FRISBEE_DIA 11.0
+#define OPTICAL_SENSOR_DISTANCE 2.5
+
+#ifdef CAMERA
+AxisCamera &camera = AxisCamera::GetInstance("10.6.68.11");
+#endif
+class RobotDemo : public SimpleRobot
+{
+#ifdef VISIONSYSTEM
+	//Structure to represent the scores for the various tests used for target identification
+	struct Scores
+	{
+		double rectangularity;
+		double aspectRatioInner;
+		double aspectRatioOuter;
+		double xEdge;
+		double yEdge;
+	};
+	static const char NON_GOAL = 0;
+	static const char MID_GOAL = 1;
+	static const char TOP_GOAL = 2;
+	struct FinalReports
+	{
+		ParticleAnalysisReport report;
+		// High middle or low goal
+		char type;
+	};
+	struct FinalReports *finalreports[16];
+#endif
+	//declare classes and stuff here. 
+	Joystick *DriveStickL;
+	Joystick *DriveStickR, *ShooterStick;
+	MOTOR_CONTROLLER *ShooterMotorLeft;
+	MOTOR_CONTROLLER *ShooterMotorRight;
+
+#ifdef BOTDRIVE
+	RobotDrive *drive;
+	MOTOR_CONTROLLER *frontRight;
+	MOTOR_CONTROLLER *frontLeft;
+	MOTOR_CONTROLLER *backRight;
+	MOTOR_CONTROLLER *backLeft;
+#endif
+	Scores *score;
+	DigitalInput *FirstOpticalSensor;
+	DigitalInput *SecondOpticalSensor;
+#ifdef TIMERS
+	Timer *DiscTimer;
+	Timer *VisionTimer;
+	Timer *OpticalSensorTimer;
+#endif
+#ifdef ENCODERS
+	Encoder *encoderRight;
+	Encoder *encoderLeft;
+#endif
+#ifdef SHIFTERS
+	DoubleSolenoid *shift;
+	DoubleSolenoid *shooterAngleController;
+	DoubleSolenoid *loaderShift;
+	Compressor *air;
+#endif
+#ifdef DS
+	DriverStation *ds;
+#endif
+
+public:
+
+	RobotDemo()
+	{
+		DriveStickL=new Joystick(1);
+		DriveStickR=new Joystick(2);
+		ShooterStick=new Joystick(3);
+
+		ShooterMotorLeft=new MOTOR_CONTROLLER(SHOOTER_MOTOR_LIFT);
+		ShooterMotorRight= new MOTOR_CONTROLLER(SHOOTER_MOTOR_SHOOT);
+
+#ifdef OPTICAL_SENSOR_TEST
+		/**************** OPTICAL SENSORS READ TRUE if no frisbee
+		 * and FALSE if frisbee (black wire connected to digital input)
+		 */
+
+		FirstOpticalSensor = new DigitalInput(FIRST_OPTICAL_SENSOR);
+		SecondOpticalSensor = new DigitalInput(SECOND_OPTICAL_SENSOR);
+#endif
+#ifdef ENCODERS
+		encoderRight=new Encoder( RIGHT_ENCODER_1, RIGHT_ENCODER_2, true);
+		encoderLeft=new Encoder( LEFT_ENCODER_1, LEFT_ENCODER_2, true);
+#endif
+
+#ifdef SHIFTERS
+		shift = new DoubleSolenoid(SHIFT_IN, SHIFT_OUT);
+		shooterAngleController = new DoubleSolenoid(LIFTER_SHIFT_IN, LIFTER_SHIFT_OUT);
+		loaderShift = new DoubleSolenoid(LOADER_SHIFT_IN, LOADER_SHIFT_OUT);
+		air= new Compressor (PRESSURE_SWITCH, COMPRESSOR_RELAY);
+		air->Start();
+
+#endif
+#ifdef BOTDRIVE
+		frontLeft = new MOTOR_CONTROLLER(DRIVE_MOTOR_F_L);
+		backLeft = new MOTOR_CONTROLLER(DRIVE_MOTOR_B_L);
+		frontRight = new MOTOR_CONTROLLER(DRIVE_MOTOR_F_R);
+		backRight = new MOTOR_CONTROLLER(DRIVE_MOTOR_B_R);
+		drive = new RobotDrive(frontLeft, backLeft, frontRight, backRight);
+#if 0   // provision for reversing motors:
+		drive->SetInvertedMotor(RobotDrive::kFrontLeftMotor, true);
+		drive->SetInvertedMotor(RobotDrive::kFrontRightMotor, true);
+
+		/* note: two motors in RobotDrive appear to be 
+		 * rear motors, not the front ones, per the lines below:
+		 */
+		drive->SetInvertedMotor(RobotDrive::kRearRightMotor, true); // controls our bot
+		drive->SetInvertedMotor(RobotDrive::kRearLeftMotor, true); // controls our bot
+
+#endif
+		drive->SetSafetyEnabled(false);
+#endif
+
+#ifdef TIMERS
+		DiscTimer = new Timer();
+		OpticalSensorTimer = new Timer();
+#endif
+#ifdef VISIONSYSTEM
+		VisionTimer = new Timer();
+#endif
+#ifdef DS
+		ds = DriverStation::GetInstance();
+#endif
+		GetWatchdog().SetExpiration(0.5);
+	}
+
+	void Autonomous()
+	{
+		cout<<"############AutomousStart######################\n";
+#ifdef VISIONSYSTEM
+#ifdef CAMERA
+		ColorImage *i;
+		camera.GetImage(i);
+		printf("\n\n\ncamera not null\n\n\n");
+#endif
+		// while (1);
+		// visionSystem();
+#endif
+		cout<<"############AutomousEnd########################\n";
+	} // autonomous
+
+	/**
+	 * This function is called once each time the robot enters operator control.
+	 */
+	void OperatorControl()
+
+	{
+#if 0
+#ifdef OPTICAL_SENSOR_TEST
+		double oneTime = -1.0f;
+		double twoTime = -1.0f;
+#endif
+#else
+#ifdef OPTICAL_SENSOR_TEST
+		bool oldFirstValue = false, oldSecondValue = false;
+		double frisbeeOne, frisbeeTwo;
+		frisbeeOne = frisbeeTwo = 0.0;
+		// These are the times when the frisbee starts being seen and stops being seen
+		// st(art|op)(1|2) are for sensors 1 and 2 respectively
+		// st(art|op)3 is for the transition between the two sensors combined.
+		// it is assumed that the sensors are less than one frisbee distance from each other
+		double start1 = -1.0, start2 = -1.0, start3 = -1.0, stop1 = -1.0,
+				stop2 = -1.0, stop3 = -1.0;
+		// difference in times between the frisbees
+		double time1 = -1.0, time2 = -1.0, time3 = -1.0;
+		// speeds of the frisbees
+		double speed1 = -1.0, speed2 = -1.0, speed3 = -1.0;
+#endif
+#endif
+		bool ArcadeMode=false;
+		int count=0;
+
+		bool bShooterRunning = false;
+		float ThrottleScaled = 0;
+
+#ifdef TIMERS
+		DiscTimer->Start();
+#endif
+#ifdef ENCODERS
+		int encoderRightValue = 0;
+		int encoderLeftValue = 0;
+		encoderRight->Start();
+		encoderLeft->Start();
+#endif
+#ifdef SHIFTERS
+		shift->Set(DoubleSolenoid::kOff);
+#endif
+#ifdef VISIONSYSTEM
+		VisionTimer->Start();
+		//int visioncount = 0;
+#endif
+		GetWatchdog().SetEnabled(true);
+
+		while (IsOperatorControl())
+		{
+			// give cRIO time for housekeeping
+			Wait(0.005f);
+			count++;
+			GetWatchdog().Feed();
+
+			// printf("%f\n",(float)DiscTimer->Get());
+#ifdef TIMERS
+
+			if (DriveStickL->GetRawButton(DISC_TIMER_RESET))
+			{
+				DiscTimer->Reset();
+			}
+#endif
+			// cout<<FirstOpticalSensor->Get()<<"\n";
+#ifdef ENCODERS
+			encoderRightValue = encoderRight->Get();
+			encoderLeftValue = encoderLeft->Get();
+#endif
+#if  0 
+			if (count >= PRINTRATE)
+			{
+				cout<<FirstOpticalSensor->Get()<< "  "
+				<< SecondOpticalSensor->Get() << "\n";
+			}
+#endif
+#if 0
+#ifdef OPTICAL_SENSOR_TEST
+			OpticalSensorTimer->Start();
+			//Doesn't work for some reason.
+			if(FirstOpticalSensor->Get() == 1)
+			{
+				oneTime = OpticalSensorTimer->Get();
+			}
+			if(FirstOpticalSensor->Get() == 0 && oneTime> -1)
+			{
+				oneTime = OpticalSensorTimer->Get() - oneTime;
+				cout<<"First Sensor Time:"<<oneTime<<endl;
+				oneTime = -1.0f;
+				//OpticalSensorTimer->Reset();
+			}
+			//Note 1 and 0 flipped for testing, seems to be the correct orientation
+			if(SecondOpticalSensor->Get() == 0)
+			{
+				twoTime = OpticalSensorTimer->Get();
+				//cout<<"TestTimer:"<<twoTime<<endl; this number makes sense
+			}
+			if(SecondOpticalSensor->Get() == 1 && twoTime> -1)
+			{
+				twoTime = OpticalSensorTimer->Get() - twoTime;
+				cout<<"Second Sensor Time:"<<twoTime<<endl;
+				twoTime = -1.0f;
+				OpticalSensorTimer->Reset();
+			}
+#endif
+#else
+#ifdef OPTICAL_SENSOR_TEST
+			// Do this so that if the value changes in the middle of execution, we still have the same value to compare
+			frisbeeOne = FIRST_OPTICAL_SENSOR_VALUE;
+			// if it toggles...
+			if (frisbeeOne != oldFirstValue)
+			{
+				//printf("%f\n",(float)DiscTimer->Get());
+				//cout<<DiscTimer->Get()<<endl;// "\n ";
+				//cout << "sensor 1: " << FIRST_OPTICAL_SENSOR_VALUE << endl;
+				if (frisbeeOne == 0)
+				{
+					stop1 = OpticalSensorTimer->Get();
+					time1 = stop1 - start1;
+					stop1 = start1 = -1;
+					speed1 = FRISBEE_DIA/time1;
+#ifdef FORTNIGHT
+					printf("The frisbee is moving at %f Miles per Fortnight as of Sensor1\n", CONVERT(speed1));
+#else
+					printf(
+							"The frisbee is moving at %f Feet per Second as of Sensor1\n", 
+							CONVERT(speed1));
+#endif
+				}
+				if (frisbeeOne == 1)
+				{
+					OpticalSensorTimer->Start();
+					start1 = OpticalSensorTimer->Get();
+					start3 = OpticalSensorTimer->Get();
+				}
+			}  // f1 changed
+			oldFirstValue = frisbeeOne;
+
+			frisbeeTwo = SECOND_OPTICAL_SENSOR_VALUE;
+			if (frisbeeTwo != oldSecondValue)
+			{
+				//cout << "sensor 2: " << SECOND_OPTICAL_SENSOR_VALUE << endl;
+				//printf("%f\n",(float)DiscTimer->Get());
+				//cout<<DiscTimer->Get()<<endl;// "\n ";
+				if (frisbeeTwo == 0)
+				{
+					stop2 = OpticalSensorTimer->Get();
+					time2 = stop2 - start2;
+					stop2 = start2 = -1;
+					speed2 = FRISBEE_DIA/time2;
+#ifdef FORTNIGHT
+					printf("The frisbee is moving at %f Miles per Fortnight as of Sensor2\n", CONVERT(speed2));
+#else
+					printf(
+							"The frisbee is moving at %f Feet per Second as of Sensor2\n", 
+							CONVERT(speed2));
+#endif
+				}
+				if (frisbeeTwo == 1)
+				{
+					OpticalSensorTimer->Start();
+					start2 = OpticalSensorTimer->Get();
+					if (start3 != -1.0)
+					{
+						stop3 = OpticalSensorTimer->Get();
+						time3 = stop3 - start3;
+						stop3 = start3 = -1;
+						speed3 = OPTICAL_SENSOR_DISTANCE/time3;
+					}
+#ifdef FORTNIGHT
+					printf("The frisbee is moving at %f Miles per Fortnight as of Sensor1 and 2\n", CONVERT(speed3));
+#else
+					printf(
+							"The frisbee is moving at %f Feet per Second as of Sensor1 and 2\n", 
+							CONVERT(speed3));
+#endif
+				}
+			}  // f2 changed
+			oldSecondValue = frisbeeTwo;
+
+			/*if (!FIRST_OPTICAL_SENSOR_VALUE && !SECOND_OPTICAL_SENSOR_VALUE)
+			 {
+			 OpticalSensorTimer->Stop();
+			 OpticalSensorTimer->Reset();
+			 }*/
+#endif
+#endif
+#ifdef BOTDRIVE
+			if (DriveStickL->GetRawButton(ARCADE_BUTTON))
+			{
+				ArcadeMode=true;
+			}
+
+			if (DriveStickL->GetRawButton(TANK_BUTTON))
+			{
+				ArcadeMode=false;
+			}
+
+			if (ArcadeMode==true)
+			{
+				drive->ArcadeDrive(DriveStickL);
+			}
+
+			else
+			{
+				drive->TankDrive(DriveStickL, DriveStickR);
+			}
+
+			//joystick 1 is the center joystick (arcade and tank).
+			//joystick 2 is the left joystick (tank).
+			//joystick 3 is the right joystick (operator).
+#endif     
+			if (ShooterStick->GetRawButton(SHOOTER_ON))
+			{
+				bShooterRunning = true;
+			}
+			if (ShooterStick->GetRawButton(SHOOTER_OFF))
+			{
+				bShooterRunning = false;
+			}
+			if (bShooterRunning == true)
+			{
+				ThrottleScaled = ShooterStick->GetThrottle();
+				ThrottleScaled *= -1;
+				ThrottleScaled += 1.0;
+				ThrottleScaled /= 2.0;
+
+				ShooterMotorSpeed(ThrottleScaled);
+#ifdef PRINT
+				if (count >= PRINTRATE)
+				{
+					cout<<"Shooter Motor speed:"<< ThrottleScaled <<"\n";
+				}
+#endif
+			}
+			else
+			{
+				ShooterMotorSpeed(0.0f);
+			}
+			if (count >= PRINTRATE)
+			{
+				count = 0;
+			}
+			if (DriveStickL->GetRawButton(SHIFT_UP_BUTTON))
+			{
+				shift->Set(DoubleSolenoid::kForward);
+			}
+			else if (DriveStickL->GetRawButton(SHIFT_DOWN_BUTTON))
+			{
+				shift->Set(DoubleSolenoid::kReverse);
+			}
+			else
+			{
+				shift->Set(DoubleSolenoid::kOff);
+			}
+		} // while is operator control
+	} // OperatorControl()
+	void ShooterMotorSpeed(float desiredspeed)
+	{
+		//victorPID->Set(PID(setpoint) + victorPID->Get());
+		ShooterMotorLeft->Set(desiredspeed);
+		ShooterMotorRight->Set(desiredspeed);
+	}
+#ifdef HOMEBREWPID
+	float PID(float setpoint)
+	{
+		float preverror = error;
+		float current = m_encL->GetRate();
+		float dt = timer->Get();
+		timer->Reset();
+		error = setpoint - current;
+		accumerror += error * dt;
+		float P = kP * error;
+		float I = kI * accumerror;
+		float D = kD * (error-preverror) / dt;
+		float F = kF * setpoint;
+		float out = P + I + D + F;
+		if (out> 1)
+		out = 1;
+		if (out < -1)
+		out = -1;
+		return out;
+	}
+#endif
+#ifdef WPILIBPID
+	MOTOR_CONTROLLER victor;
+	Encoder encoder;
+	encoder.Start(); encoder.SetDistancePerPulse(.005); (arbitrary value)
+	encoder.SetPIDParameter(Encoder::kRate);
+	PIDController p(kP, kI, kD, kF, &encoder, &victor);
+	p.Enable();
+	p.SetSetpoint(setpoint);
+#endif
+#ifdef VISIONSYSTEM
+	/**
+	 * Computes the estimated distance to a target using the height of the particle in the image. For more information and graphics
+	 * showing the math behind this approach see the Vision Processing section of the ScreenStepsLive documentation.
+	 * 
+	 * @param image The image to use for measuring the particle estimated rectangle
+	 * @param report The Particle Analysis Report for the particle
+	 * @param outer True if the particle should be treated as an outer target, false to treat it as a center target
+	 * @return The estimated distance to the target in Inches.
+	 */
+
+	void visionSystem(void)
+	{
+		Threshold threshold(60, 100, 90, 255, 20, 255); //HSV threshold criteria, ranges are in that order ie. Hue is 60-100 ParticleFilterCriteria2
+		ParticleFilterCriteria2 criteria[] =
+		{
+		{ IMAQ_MT_AREA, AREA_MINIMUM, 65535, false, false } };
+		VisionTimer->Start();
+		ColorImage *image;
+		Scores *scores;
+		//image = new RGBImage("/testImage.jpg");	// get the sample image from the cRIO flash
+#ifdef CAMERA 
+		camera.GetImage(image); //To get the images from the camera comment the line above and uncomment this one
+#else
+		image = new RGBImage("/HybridLine_SmallGreen4.jpg");
+#endif	
+
+		BinaryImage *thresholdImage = image->ThresholdHSV(threshold); // get just the green target pixels
+		//thresholdImage->Write("/threshold.bmp");
+		BinaryImage *convexHullImage = thresholdImage->ConvexHull(false); // fill in partial and full rectangles
+		//convexHullImage->Write("/ConvexHull.bmp");
+		BinaryImage *filteredImage = convexHullImage->ParticleFilter(criteria,
+				1); //Remove small particles
+		//filteredImage->Write("Filtered.bmp");
+
+		vector<ParticleAnalysisReport> *reports =
+				filteredImage->GetOrderedParticleAnalysisReports(); //get a particle analysis report for each particle
+
+		scores = new Scores[reports->size()];
+
+		//Iterate through each particle, scoring it and determining whether it is a target or not
+		for (unsigned i = 0; i < reports->size(); i++)
+		{
+			ParticleAnalysisReport *report = &(reports->at(i));
+
+			scores[i].rectangularity = scoreRectangularity(report);
+			scores[i].aspectRatioOuter = scoreAspectRatio(filteredImage,
+					report, true);
+			scores[i].aspectRatioInner = scoreAspectRatio(filteredImage,
+					report, false);
+			scores[i].xEdge = scoreXEdge(thresholdImage, report);
+			scores[i].yEdge = scoreYEdge(thresholdImage, report);
+
+			if (scoreCompare(scores[i], false))
+			{
+				printf(
+						"particle: %d  is a High Goal  centerX: %f  centerY: %f \n",
+						i, report->center_mass_x_normalized,
+						report->center_mass_y_normalized);
+				printf("Distance: %f \n", computeDistance(thresholdImage,
+						report, false));
+				finalreports[i]->report = *report;
+				finalreports[i]->type = TOP_GOAL;
+			}
+			else if (scoreCompare(scores[i], true))
+			{
+				printf(
+						"particle: %d  is a Middle Goal  centerX: %f  centerY: %f \n",
+						i, report->center_mass_x_normalized,
+						report->center_mass_y_normalized);
+				printf("Distance: %f \n", computeDistance(thresholdImage,
+						report, true));
+				finalreports[i]->report = *report;
+				finalreports[i]->type = MID_GOAL;
+			}
+			else
+			{
+				printf(
+						"particle: %d  is not a goal  centerX: %f  centerY: %f \n",
+						i, report->center_mass_x_normalized,
+						report->center_mass_y_normalized);
+				finalreports[i]->report = *report;
+				finalreports[i]->type = NON_GOAL;
+			}
+			printf("rect: %f  ARinner: %f \n", scores[i].rectangularity,
+					scores[i].aspectRatioInner);
+			printf("ARouter: %f  xEdge: %f  yEdge: %f  \n",
+					scores[i].aspectRatioOuter, scores[i].xEdge,
+					scores[i].yEdge);
+		}
+		printf("\n");
+
+		// be sure to delete images after using them
+		delete filteredImage;
+		delete convexHullImage;
+		delete thresholdImage;
+		delete image;
+
+		//delete allocated reports and Scores objects also
+		delete scores;
+		delete reports;
+
+		cout<<"\n *****Vision Time:"<<VisionTimer->Get()<<"\n";
+		VisionTimer->Reset();
+	}
+	double computeDistance(BinaryImage *image, ParticleAnalysisReport *report,
+			bool outer)
+	{
+		double rectShort, height;
+		int targetHeight;
+
+		imaqMeasureParticle(image->GetImaqImage(), report->particleIndex, 0,
+				IMAQ_MT_EQUIVALENT_RECT_SHORT_SIDE, &rectShort);
+		//using the smaller of the estimated rectangle short side and the bounding rectangle height results in better performance
+		//on skewed rectangles
+		height = min(report->boundingRect.height, rectShort);
+		targetHeight = outer ? 29 : 21;
+		return X_IMAGE_RES * targetHeight / (height * 12 * 2 * tan(VIEW_ANGLE*PI/(180*2)));
+	}
+
+	/**
+	 * Computes a score (0-100) comparing the aspect ratio to the ideal aspect ratio for the target. This method uses
+	 * the equivalent rectangle sides to determine aspect ratio as it performs better as the target gets skewed by moving
+	 * to the left or right. The equivalent rectangle is the rectangle with sides x and y where particle area= x*y
+	 * and particle perimeter= 2x+2y
+	 * 
+	 * @param image The image containing the particle to score, needed to perform additional measurements
+	 * @param report The Particle Analysis Report for the particle, used for the width, height, and particle number
+	 * @param outer	Indicates whether the particle aspect ratio should be compared to the ratio for the inner target or the outer
+	 * @return The aspect ratio score (0-100)
+	 */
+	double scoreAspectRatio(BinaryImage *image, ParticleAnalysisReport *report,
+			bool outer)
+	{
+		double rectLong, rectShort, idealAspectRatio, aspectRatio;
+		idealAspectRatio = outer ? (62/29) : (62/20); //Dimensions of goal opening + 4 inches on all 4 sides for reflective tape
+
+		imaqMeasureParticle(image->GetImaqImage(), report->particleIndex, 0,
+				IMAQ_MT_EQUIVALENT_RECT_LONG_SIDE, &rectLong);
+		imaqMeasureParticle(image->GetImaqImage(), report->particleIndex, 0,
+				IMAQ_MT_EQUIVALENT_RECT_SHORT_SIDE, &rectShort);
+
+		//Divide width by height to measure aspect ratio
+		if (report->boundingRect.width> report->boundingRect.height)
+		{
+			//particle is wider than it is tall, divide long by short
+			aspectRatio = 100*(1 -fabs((1 -((rectLong/rectShort)
+					/idealAspectRatio))));
+		}
+		else
+		{
+			//particle is taller than it is wide, divide short by long
+			aspectRatio = 100*(1 -fabs((1 -((rectShort/rectLong)
+					/idealAspectRatio))));
+		}
+		return (max(0, min(aspectRatio, 100))); //force to be in range 0-100
+	} //ScroreAspectRatio {}
+
+	/**
+	 * Compares scores to defined limits and returns true if the particle appears to be a target
+	 * 
+	 * @param scores The structure containing the scores to compare
+	 * @param outer True if the particle should be treated as an outer target, false to treat it as a center target
+	 * 
+	 * @return True if the particle meets all limits, false otherwise
+	 */
+
+	bool scoreCompare(Scores scores, bool outer)
+	{
+		bool isTarget = true;
+
+		isTarget &= scores.rectangularity> RECTANGULARITY_LIMIT;
+		if (outer)
+		{
+			isTarget &= scores.aspectRatioOuter> ASPECT_RATIO_LIMIT;
+		}
+		else
+		{
+			isTarget &= scores.aspectRatioInner> ASPECT_RATIO_LIMIT;
+		}
+		isTarget &= scores.xEdge> X_EDGE_LIMIT;
+		isTarget &= scores.yEdge> Y_EDGE_LIMIT;
+
+		return isTarget;
+	}
+
+	/**
+	 * Computes a score (0-100) estimating how rectangular the particle is by comparing the area of the particle
+	 * to the area of the bounding box surrounding it. A perfect rectangle would cover the entire bounding box.
+	 * 
+	 * @param report The Particle Analysis Report for the particle to score
+	 * @return The rectangularity score (0-100)
+	 */
+	double scoreRectangularity(ParticleAnalysisReport *report)
+	{
+		if (report->boundingRect.width*report->boundingRect.height !=0)
+		{
+			return 100*report->particleArea/(report->boundingRect.width
+					*report->boundingRect.height);
+		}
+		else
+		{
+			return 0;
+		}
+	}
+
+	/**
+	 * Computes a score based on the match between a template profile and the particle profile in the X direction. This method uses the
+	 * the column averages and the profile defined at the top of the sample to look for the solid vertical edges with
+	 * a hollow center.
+	 * 
+	 * @param image The image to use, should be the image before the convex hull is performed
+	 * @param report The Particle Analysis Report for the particle
+	 * 
+	 * @return The X Edge Score (0-100)
+	 */
+	double scoreXEdge(BinaryImage *image, ParticleAnalysisReport *report)
+	{
+		double total = 0;
+		LinearAverages *averages = imaqLinearAverages2(image->GetImaqImage(),
+				IMAQ_COLUMN_AVERAGES, report->boundingRect);
+		for (int i=0; i < (averages->columnCount); i++)
+		{
+			if (xMin[i*(XMINSIZE-1)/averages->columnCount]
+					< averages->columnAverages[i]
+					&& averages->columnAverages[i] < xMax[i*(XMAXSIZE-1)/averages->columnCount])
+			{
+				total++;
+			}
+		}
+		total = 100*total/(averages->columnCount); //convert to score 0-100
+		imaqDispose(averages); //let IMAQ dispose of the averages struct
+		return total;
+	}
+
+	/**
+	 * Computes a score based on the match between a template profile and the particle profile in the Y direction. This method uses the
+	 * the row averages and the profile defined at the top of the sample to look for the solid horizontal edges with
+	 * a hollow center
+	 * 
+	 * @param image The image to use, should be the image before the convex hull is performed
+	 * @param report The Particle Analysis Report for the particle
+	 * 
+	 * @return The Y Edge score (0-100)
+	 */
+	double scoreYEdge(BinaryImage *image, ParticleAnalysisReport *report)
+	{
+		double total = 0;
+		LinearAverages *averages = imaqLinearAverages2(image->GetImaqImage(),
+				IMAQ_ROW_AVERAGES, report->boundingRect);
+		for (int i=0; i < (averages->rowCount); i++)
+		{
+			if (yMin[i*(YMINSIZE-1)/averages->rowCount] < averages->rowAverages[i]
+					&& averages->rowAverages[i] < yMax[i*(YMAXSIZE-1)/averages->rowCount])
+			{
+				total++;
+			}
+		}
+		total = 100*total/(averages->rowCount); //convert to score 0-100
+		imaqDispose(averages); //let IMAQ dispose of the averages struct
+		return total;
+	}
+#endif
+};
+START_ROBOT_CLASS(RobotDemo)
+;
+
+#if 0
+
+20130124: *****Robot drive tested, but not driven on ground. DONE
+Encoders questionable.
+Driven on 6.68.9 and 6.68.6
+Need to put a camera code and targeting.
+*****Need code to shift. DONE
+*****Need code for pnuemadic pump. DONE
+*****Design control system: joysticks, buttons. DONE
+Regulate shooter motor speed.
+Optical freezbie timer.
+
+20130124: JLA & GK: Fixed Left/Right Back/Forward swap problem.
+Reassigned joysticks to fix left/right swap
+Deleted second moter invertion block in robot
+loop to fix back/forward
+
+20130128: JLA $ GK: Worked on Vision Control
+Done& Added timers to vision sample timing the legnth
+& of the vision processing
+& NOTE***************************************
+& *******************************************
+& *******************************************
+& Crio on dummy Bot (not kitbot) needs to be
+& reflashed
+& ENDNOTE************************************
+& *******************************************
+& *******************************************
+
+20130129: HS & JLA: reimaged the crio on plywood robot.
+vision processing takes 0.15 sec.
+20130129: JLA & GK: Ported the VisionSample 2013 example to KitbotCode
+Function visionSytem(void) calls vision code
+Added
+#define VISIONSYSTEM for Vision code
+20130131: JLA & GK: Added code using joystick to set shooter motor speed
+Done& NOTE***********************************************
+& ***************************************************
+& ***************************************************
+& Bug in printing on termenal, unknown garbage output printing
+& ENDNOTE********************************************
+& ***************************************************
+& ***************************************************
+2012031: JLA & CJ & GK: Added compressor and soleniod code.
+20130206: ML & CJ & GK: Added things to the vision system.
+20130207: JLA: *****moved Solenoids from type Solenoids to type DoubleSolenoids to support movement in both directions. (NEEDS TESTING)
+*****Altered shifting code to allow for movemnt in both directions. The Enum of the type required to chenge direction is under DoubleSolenoid::(NEEDS TESTING)
+Changed PWM motor inputs to support the redesigned robot.
+20130209: JLA: Rewrote shooter code according to discussed algorithems.
+NOTE**************************************************
+******************************************************
+******************************************************
+Code nonfunctional, I have not managed to get the code function
+Numbers seems to have no rhyme and reason to it.
+ENDNOTE***********************************************
+******************************************************
+******************************************************
+
+#endif

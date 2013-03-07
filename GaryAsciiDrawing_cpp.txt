@@ -1,0 +1,737 @@
+#include "WPILib.h"
+#include "Vision/RGBImage.h"
+#include "Vision/BinaryImage.h"
+#include "Math.h"
+
+/**
+ * Sample program to use NIVision to find rectangles in the scene that are illuminated
+ * by a LED ring light (similar to the model from FIRSTChoice). The camera sensitivity
+ * is set very low so as to only show light sources and remove any distracting parts
+ * of the image.
+ * 
+ * The CriteriaCollection is the set of criteria that is used to filter the set of
+ * rectangles that are detected. In this example we're looking for rectangles with
+ * a minimum width of 30 pixels and maximum of 400 pixels.
+ * 
+ * The algorithm first does a color threshold operation that only takes objects in the
+ * scene that have a bright green color component. Then a convex hull operation fills 
+ * all the rectangle outlines (even the partially occluded ones). Then a small object filter
+ * removes small particles that might be caused by green reflection scattered from other 
+ * parts of the scene. Finally all particles are scored on rectangularity, aspect ratio,
+ * and hollowness to determine if they match the target.
+ *
+ * Look in the VisionImages directory inside the project that is created for the sample
+ * images as well as the NI Vision Assistant file that contains the vision command
+ * chain (open it with the Vision Assistant)
+ */
+
+//Camera constants used for distance calculation
+#define X_IMAGE_RES 320		//X Image resolution in pixels, should be 160, 320 or 640
+#define VIEW_ANGLE 48		//Axis 206 camera
+//#define VIEW_ANGLE 43.5  //Axis M1011 camera
+#define PI 3.141592653
+
+//Score limits used for target identification
+#define RECTANGULARITY_LIMIT 60
+#define ASPECT_RATIO_LIMIT 75
+#define X_EDGE_LIMIT 40
+#define Y_EDGE_LIMIT 60
+
+//Minimum area of particles to be considered
+#define AREA_MINIMUM 500
+
+//Edge profile constants used for hollowness score calculation
+#define XMAXSIZE 24
+#define XMINSIZE 24
+#define YMAXSIZE 24
+#define YMINSIZE 48
+const double xMax[XMAXSIZE] =
+    {
+	    1,
+	    1,
+	    1,
+	    1,
+	    .5,
+	    .5,
+	    .5,
+	    .5,
+	    .5,
+	    .5,
+	    .5,
+	    .5,
+	    .5,
+	    .5,
+	    .5,
+	    .5,
+	    .5,
+	    .5,
+	    .5,
+	    .5,
+	    1,
+	    1,
+	    1,
+	    1
+    };
+const double xMin[XMINSIZE] =
+    {
+	    .4,
+	    .6,
+	    .1,
+	    .1,
+	    .1,
+	    .1,
+	    .1,
+	    .1,
+	    .1,
+	    .1,
+	    .1,
+	    .1,
+	    .1,
+	    .1,
+	    .1,
+	    .1,
+	    .1,
+	    .1,
+	    .1,
+	    .1,
+	    .1,
+	    .1,
+	    0.6,
+	    0
+    };
+const double yMax[YMAXSIZE] =
+    {
+	    1,
+	    1,
+	    1,
+	    1,
+	    .5,
+	    .5,
+	    .5,
+	    .5,
+	    .5,
+	    .5,
+	    .5,
+	    .5,
+	    .5,
+	    .5,
+	    .5,
+	    .5,
+	    .5,
+	    .5,
+	    .5,
+	    .5,
+	    1,
+	    1,
+	    1,
+	    1
+    };
+const double yMin[YMINSIZE] =
+    {
+	    .4,
+	    .6,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .05,
+	    .6,
+	    0
+    };
+
+const int NetConsoleWidth = 84; // chars, can be changed if ...
+const int NetConsoleHeight = 23; // chars  you make it bigger.
+char NetConsoleBuffer[NetConsoleHeight][NetConsoleWidth + 1]; // TODO zz
+ParticleAnalysisReport *r;
+const int CameraImageWidth = 640; // pixels
+const int CameraImageHeight = 480; // pixels
+
+const int verticalCountOffset = 1; // lines down from the top we start the display.
+const int rightHandBoundaryWidth = 2; // reserve this many columns for ParticleString
+// To show the detetcted particle count down the side of 
+// the NetConsole image. Should be fewer chars than NetConsoleHeight
+const char *ParticleString = ">9 Particles   FRC668"; // length = 21+null.
+const unsigned int MaxParticlesDrawn = 9; // THIS MUST MATCH THE DIGIT ABOVE in ParticleString.
+const int StartParticlesDrawn = 2; // the space after the '9', MUST MATCH TOO
+
+
+const char CornerMarker = '+'; // draw this char to show the corners of the virtual screen
+
+
+//
+
+class VisionSample2012: public SimpleRobot
+    {
+    //Structure to represent the scores for the various tests used for target identification
+    struct Scores
+	{
+	double rectangularity;
+	double aspectRatioInner;
+	double aspectRatioOuter;
+	double xEdge;
+	double yEdge;
+
+	};
+
+    RobotDrive myRobot; // robot drive system
+    Joystick stick; // only joystick
+    Scores *scores;
+    int i, j, k, l, m, n, p, q;
+    float centerx, centery;
+
+public:
+    VisionSample2012(void) :
+	myRobot(1, 2), // these must be initialized in the same order
+		stick(1) // as they are declared above.
+	{
+	myRobot.SetExpiration(0.1);
+	myRobot.SetSafetyEnabled(false);
+	}
+
+    /**
+     * Image processing code to identify 2013 Vision targets
+     */
+    int VisionSample2012::ScaleX(float x) // width
+
+	{
+
+	// what's this mess? Our granlarity is so low we want to round off
+	// rather than truncate, making an int from (float+0.5) rounds up or
+	// down as you expect.
+
+	return (int) ((x * (float) (NetConsoleWidth - rightHandBoundaryWidth)
+		/ (float) CameraImageWidth) + 0.5);
+	}
+
+    int VisionSample2012::ScaleY(float y) // height
+
+	{
+
+	// what's this mess? Our granlarity is so low we want to round off
+	// rather than truncate. making an int from (float+0.5) rounds up or
+	// down as you expect. making an int from a float rounds down regardless
+	// of the value of the fraction.
+
+	return (int) ((y * (float) NetConsoleHeight / (float) CameraImageHeight)
+		+ 0.5);
+	}
+
+    void Autonomous(void)
+	{
+
+	Threshold threshold(60, 100, 90, 255, 20, 255); //HSV threshold criteria, ranges are in that order ie. Hue is 60-100
+	ParticleFilterCriteria2 criteria[] =
+	    {
+		{
+		IMAQ_MT_AREA, AREA_MINIMUM, 65535, false, false
+		}
+	    }; //Particle filter criteria, used to filter out small particles
+	// AxisCamera &camera = AxisCamera::GetInstance();	//To use the Axis camera uncomment this line
+
+	//while (IsAutonomous() && IsEnabled()) 
+	    {
+	    /**
+	     * Do the image capture with the camera and apply the algorithm described above. This
+	     * sample will either get images from the camera or from an image file stored in the top
+	     * level directory in the flash memory on the cRIO. The file name in this case is "testImage.jpg"
+	     */
+	    ColorImage *image;
+	    //image = new RGBImage("/testImage.jpg");		// get the sample image from the cRIO flash
+	    image = new RGBImage("HybridLine_SmallGreen4.jpg"/*"/10ft2.jpg"*/);
+	    //camera.GetImage(image);				//To get the images from the camera comment the line above and uncomment this one
+	    BinaryImage *thresholdImage = image->ThresholdHSV(threshold); // get just the green target pixels
+	    //thresholdImage->Write("/threshold.bmp");
+#if 1
+	    BinaryImage *convexHullImage = thresholdImage->ConvexHull(false); // fill in partial and full rectangles
+	    //convexHullImage->Write("/ConvexHull.bmp");
+#endif
+#if 1
+	    BinaryImage *filteredImage = convexHullImage->ParticleFilter(
+		    criteria, 1); //Remove small particles
+	    //filteredImage->Write("Filtered.bmp");
+#endif
+	    vector<ParticleAnalysisReport> *reports =
+	    //thresholdImage->GetOrderedParticleAnalysisReports();
+		    //convexHullImage->GetOrderedParticleAnalysisReports();
+		    filteredImage->GetOrderedParticleAnalysisReports();
+
+	    printf("reports->size()=%u\n", reports->size()); // TODO 
+	    // we need to display an image!!
+
+	    // initialize the print buffer to all blanks,
+	    // we don't init the last char of
+	    // NetConsole[i]. It gets a '\0' (terminating
+	    // null) later:
+
+	    for (i = 0; i < NetConsoleHeight; i++)
+		for (j = 0; j < NetConsoleWidth; j++)
+		    NetConsoleBuffer[i][j] = ' '; 
+	    
+		    /* construct a rectangle drawing with the number (0, 1, 2, ..) of the particle. 
+		     ** i is the particle number. 
+		     ** (j,l) is the upper left (x,y) coordinate.
+		     ** k is the width, the number of chars that make up the top and bottom.
+		     ** l is the height, the number of chars that make up the sides.
+		     ** the bottom right corner is (j+k-1, l+k-1)
+		     */
+
+	    // (int) cast below just avoids getting a warning.
+	    for (i = 0; i < (int) reports->size(); i++)
+		{
+		// get the ParticleAnalysisReport for particle i, describes one particle:
+
+		r = &((*reports)[i]);
+		// draw the top - start at (x,y)=(left,top)	, for width characters.	
+
+
+		j = ScaleX(r->boundingRect.left);
+
+		if (j < 0)
+		    {
+		    j = 0;
+		    }
+
+		// we draw "width" characters. width can't be 0, we wouldn't draw
+		// anything. width can be the full width of the rectangle, =
+		// NetConsoleWidth
+
+		k = ScaleX(r->boundingRect.width);
+
+		if (k < 1)
+		    {
+		    k = 1; // need at least 1 char wide
+		    }
+		k = k + j; // starting point + width
+
+		if (k > (NetConsoleWidth - rightHandBoundaryWidth))
+
+		    {
+		    k = NetConsoleWidth - rightHandBoundaryWidth;
+		    }
+
+		// now horiz line starts at x=j and ends at k-1. 
+		// figure out where the y axis (how far down) the horizontal
+		// lines go to make the top and bottom.
+
+
+		l = ScaleY(r->boundingRect.top); // can be 0 to (bottom-1)
+
+		if (l < 0)
+		    {
+		    l = 0;
+		    }
+
+		m = ScaleY(r->boundingRect.height);
+
+		if (m < 1)
+		    {
+		    m = 1; // have to be at least 1 char high
+		    }
+
+		m = m + l; // endpoint
+
+		if (m > NetConsoleHeight)
+		    {
+		    m = NetConsoleHeight;
+		    }
+
+		for (n = j; n < k; n++) // draw across
+
+		    { // draw left to right
+		    // draw top and bottom (horizontal) lines. i is coverted to 
+		    // its ascii equiv by adding to ascii 0. Trust me, it works.
+
+		    NetConsoleBuffer[l][n] = NetConsoleBuffer[m - 1][n] = '0'
+			    + i;
+		    }
+
+		// draw the sides down, left and right								
+		for (n = l; n < m; n++)
+		    {
+		    NetConsoleBuffer[n][j] = NetConsoleBuffer[n][k - 1] = '0'
+			    + i;
+
+		    }
+
+		} // for each particle
+
+	    // fill in the rightmost column with particle count.
+
+	    if ((reports->size() > MaxParticlesDrawn))
+		{
+		// don't want to mess with double digits, say ">9"
+
+		for (i = 0; (i < (int) strlen(ParticleString)) // don't run out of string
+			&& (i < (NetConsoleHeight - 2 + verticalCountOffset)); // leave room for corner '+'
+		i++)
+		    {
+		    // +1 below leaves room for the corner '+'
+		    NetConsoleBuffer[i + verticalCountOffset][NetConsoleWidth
+			    - 1] = ParticleString[i];
+
+		    } // for chars in ParticleString[]
+		} // >9 particles
+
+	    else
+		{ // <= 9 particles, show the quantity. Skip the '<' and the '9' for now.
+
+		for (i = StartParticlesDrawn; (i < (int) strlen(ParticleString)) // don't run out of string
+			&& (i < (NetConsoleHeight - 2 + verticalCountOffset)); // leave room for corner '+'
+		i++)
+		    {
+		    // +1 below leaves room for the corner '+'
+		    NetConsoleBuffer[i + verticalCountOffset][NetConsoleWidth
+			    - 1] = ParticleString[i];
+
+		    }
+		// now put in the digit. we start with an ascii '0', and add in the 
+		// count. This creates the count in ascii. for example,
+		// '4' = '0'+4
+
+		NetConsoleBuffer[verticalCountOffset + 1][NetConsoleWidth - 1]
+			= '0' + reports->size();
+
+		} // <= 9 particles found
+	    // now we've constructed the image to be displayed.
+	    // mark the corners with '+' .
+
+	    /* Upper Left corner */
+	    NetConsoleBuffer[0][0] =
+	    /* Upper Right */NetConsoleBuffer[0][NetConsoleWidth
+		    - rightHandBoundaryWidth]
+		    =
+		    /* Lower Left  */NetConsoleBuffer[NetConsoleHeight - 1][0]
+			    =
+			    /* Lower Right */NetConsoleBuffer[NetConsoleHeight
+				    - 1][NetConsoleWidth
+				    - rightHandBoundaryWidth] = CornerMarker;
+	    for (i = 0; i < (int) reports->size(); i++)
+		{
+		r = &((*reports)[i]);
+		// draw the top - start at (x,y)=(left,top)	, for width characters.	
+		centery = (float) ScaleY(r->boundingRect.top)
+			+ ((float) ScaleY(r->boundingRect.height) / 2);
+		centerx = (float) ScaleX(r->boundingRect.left)
+			+ ((float) ScaleX(r->boundingRect.width) / 2);
+		p = (int) (centery + .5);
+		if (p < 0)
+		    {
+		    p = 0;
+		    }
+		if (p > NetConsoleHeight)
+		    {
+		    p = NetConsoleHeight;
+		    }
+		q = (int) (centerx + .5);
+		if (q < 0)
+		    {
+		    q = 0;
+		    }
+		if (q > (NetConsoleWidth - rightHandBoundaryWidth))
+
+		    {
+		    q = NetConsoleWidth - rightHandBoundaryWidth;
+		    }
+		NetConsoleBuffer[p - 1][q - 1] = '0' + i;
+
+		}
+	    // now put null termination at end of each line. we
+	    // do this last to prevent a bug changing the \0.
+	    // remember the width is NetConsoleWidth+1
+	    // in the declaration to make room for the '\0'.
+
+	    for (i = 0; i < NetConsoleHeight; i++)
+		{
+		NetConsoleBuffer[i][NetConsoleWidth] = '\0';
+
+		}
+
+	    // now (finally!) print the lines one by one, top to bottom.
+	    for (i = 0; i < NetConsoleHeight; i++)
+		printf("%s\n", &NetConsoleBuffer[i][0]);
+#if 0
+	    //get a particle analysis report for each particle
+	    scores = new Scores[reports->size()];
+
+	    //Iterate through each particle, scoring it and determining whether it is a target or not
+	    for (unsigned i = 0; i < reports->size(); i++)
+		{
+		ParticleAnalysisReport *report = &(reports->at(i));
+
+		scores[i].rectangularity = scoreRectangularity(report);
+		scores[i].aspectRatioOuter = scoreAspectRatio(filteredImage,
+			report, true);
+		scores[i].aspectRatioInner = scoreAspectRatio(filteredImage,
+			report, false);
+		scores[i].xEdge = scoreXEdge(thresholdImage, report);
+		scores[i].yEdge = scoreYEdge(thresholdImage, report);
+
+		if (scoreCompare(scores[i], false))
+		    {
+		    printf(
+			    "particle: %d  is a High Goal  centerX: %f  centerY: %f \n",
+			    i, report->center_mass_x_normalized,
+			    report->center_mass_y_normalized);
+		    printf("Distance: %f \n",
+			    computeDistance(thresholdImage, report, false));
+		    }
+		else if (scoreCompare(scores[i], true))
+		    {
+		    printf(
+			    "particle: %d  is a Middle Goal  centerX: %f  centerY: %f \n",
+			    i, report->center_mass_x_normalized,
+			    report->center_mass_y_normalized);
+		    printf("Distance: %f \n",
+			    computeDistance(thresholdImage, report, true));
+		    }
+		else
+		    {
+		    printf(
+			    "particle: %d  is not a goal  centerX: %f  centerY: %f \n",
+			    i, report->center_mass_x_normalized,
+			    report->center_mass_y_normalized);
+		    }
+		printf("rect: %f  ARinner: %f \n", scores[i].rectangularity,
+			scores[i].aspectRatioInner);
+		printf("ARouter: %f  xEdge: %f  yEdge: %f  \n",
+			scores[i].aspectRatioOuter, scores[i].xEdge,
+			scores[i].yEdge);
+		}
+	    printf("\n");
+#endif
+	    // be sure to delete images after using them
+	    delete filteredImage;
+	    delete convexHullImage;
+	    delete thresholdImage;
+	    delete image;
+
+	    //delete allocated reports and Scores objects also
+	    delete scores;
+	    delete reports;
+	    }
+	}
+
+    /**
+     * Runs the motors with arcade steering. 
+     */
+    void OperatorControl(void)
+	{
+	myRobot.SetSafetyEnabled(true);
+	while (IsOperatorControl())
+	    {
+	    Wait(0.005); // wait for a motor update time
+	    }
+	}
+
+    /**
+     * Computes the estimated distance to a target using the height of the particle in the image. For more information and graphics
+     * showing the math behind this approach see the Vision Processing section of the ScreenStepsLive documentation.
+     * 
+     * @param image The image to use for measuring the particle estimated rectangle
+     * @param report The Particle Analysis Report for the particle
+     * @param outer True if the particle should be treated as an outer target, false to treat it as a center target
+     * @return The estimated distance to the target in Inches.
+     */
+    double computeDistance(BinaryImage *image, ParticleAnalysisReport *report,
+	    bool outer)
+	{
+	double rectShort, height;
+	int targetHeight;
+
+	imaqMeasureParticle(image->GetImaqImage(), report->particleIndex, 0,
+		IMAQ_MT_EQUIVALENT_RECT_SHORT_SIDE, &rectShort);
+	//using the smaller of the estimated rectangle short side and the bounding rectangle height results in better performance
+	//on skewed rectangles
+	height = min(report->boundingRect.height, rectShort);
+	targetHeight = outer ? 29 : 21;
+
+	return X_IMAGE_RES * targetHeight / (height * 12 * 2 * tan(
+		VIEW_ANGLE * PI / (180 * 2)));
+	}
+
+    /**
+     * Computes a score (0-100) comparing the aspect ratio to the ideal aspect ratio for the target. This method uses
+     * the equivalent rectangle sides to determine aspect ratio as it performs better as the target gets skewed by moving
+     * to the left or right. The equivalent rectangle is the rectangle with sides x and y where particle area= x*y
+     * and particle perimeter= 2x+2y
+     * 
+     * @param image The image containing the particle to score, needed to perform additional measurements
+     * @param report The Particle Analysis Report for the particle, used for the width, height, and particle number
+     * @param outer	Indicates whether the particle aspect ratio should be compared to the ratio for the inner target or the outer
+     * @return The aspect ratio score (0-100)
+     */
+    double scoreAspectRatio(BinaryImage *image, ParticleAnalysisReport *report,
+	    bool outer)
+	{
+	double rectLong, rectShort, idealAspectRatio, aspectRatio;
+	idealAspectRatio = outer ? (62 / 29) : (62 / 20); //Dimensions of goal opening + 4 inches on all 4 sides for reflective tape
+
+	imaqMeasureParticle(image->GetImaqImage(), report->particleIndex, 0,
+		IMAQ_MT_EQUIVALENT_RECT_LONG_SIDE, &rectLong);
+	imaqMeasureParticle(image->GetImaqImage(), report->particleIndex, 0,
+		IMAQ_MT_EQUIVALENT_RECT_SHORT_SIDE, &rectShort);
+
+	//Divide width by height to measure aspect ratio
+	if (report->boundingRect.width > report->boundingRect.height)
+	    {
+	    //particle is wider than it is tall, divide long by short
+	    aspectRatio = 100 * (1 - fabs(
+		    (1 - ((rectLong / rectShort) / idealAspectRatio))));
+	    }
+	else
+	    {
+	    //particle is taller than it is wide, divide short by long
+	    aspectRatio = 100 * (1 - fabs(
+		    (1 - ((rectShort / rectLong) / idealAspectRatio))));
+	    }
+	return (max(0, min(aspectRatio, 100))); //force to be in range 0-100
+	}
+
+    /**
+     * Compares scores to defined limits and returns true if the particle appears to be a target
+     * 
+     * @param scores The structure containing the scores to compare
+     * @param outer True if the particle should be treated as an outer target, false to treat it as a center target
+     * 
+     * @return True if the particle meets all limits, false otherwise
+     */
+    bool scoreCompare(Scores scores, bool outer)
+	{
+	bool isTarget = true;
+
+	isTarget &= scores.rectangularity > RECTANGULARITY_LIMIT;
+	if (outer)
+	    {
+	    isTarget &= scores.aspectRatioOuter > ASPECT_RATIO_LIMIT;
+	    }
+	else
+	    {
+	    isTarget &= scores.aspectRatioInner > ASPECT_RATIO_LIMIT;
+	    }
+	isTarget &= scores.xEdge > X_EDGE_LIMIT;
+	isTarget &= scores.yEdge > Y_EDGE_LIMIT;
+
+	return isTarget;
+	}
+
+    /**
+     * Computes a score (0-100) estimating how rectangular the particle is by comparing the area of the particle
+     * to the area of the bounding box surrounding it. A perfect rectangle would cover the entire bounding box.
+     * 
+     * @param report The Particle Analysis Report for the particle to score
+     * @return The rectangularity score (0-100)
+     */
+    double scoreRectangularity(ParticleAnalysisReport *report)
+	{
+	if (report->boundingRect.width * report->boundingRect.height != 0)
+	    {
+	    return 100 * report->particleArea / (report->boundingRect.width
+		    * report->boundingRect.height);
+	    }
+	else
+	    {
+	    return 0;
+	    }
+	}
+
+    /**
+     * Computes a score based on the match between a template profile and the particle profile in the X direction. This method uses the
+     * the column averages and the profile defined at the top of the sample to look for the solid vertical edges with
+     * a hollow center.
+     * 
+     * @param image The image to use, should be the image before the convex hull is performed
+     * @param report The Particle Analysis Report for the particle
+     * 
+     * @return The X Edge Score (0-100)
+     */
+    double scoreXEdge(BinaryImage *image, ParticleAnalysisReport *report)
+	{
+	double total = 0;
+	LinearAverages *averages = imaqLinearAverages2(image->GetImaqImage(),
+		IMAQ_COLUMN_AVERAGES, report->boundingRect);
+	for (int i = 0; i < (averages->columnCount); i++)
+	    {
+	    if (xMin[i * (XMINSIZE - 1) / averages->columnCount]
+		    < averages->columnAverages[i]
+		    && averages->columnAverages[i] < xMax[i * (XMAXSIZE - 1)
+			    / averages->columnCount])
+		{
+		total++;
+		}
+	    }
+	total = 100 * total / (averages->columnCount); //convert to score 0-100
+	imaqDispose(averages); //let IMAQ dispose of the averages struct
+	return total;
+	}
+
+    /**
+     * Computes a score based on the match between a template profile and the particle profile in the Y direction. This method uses the
+     * the row averages and the profile defined at the top of the sample to look for the solid horizontal edges with
+     * a hollow center
+     * 
+     * @param image The image to use, should be the image before the convex hull is performed
+     * @param report The Particle Analysis Report for the particle
+     * 
+     * @return The Y Edge score (0-100)
+     */
+    double scoreYEdge(BinaryImage *image, ParticleAnalysisReport *report)
+	{
+	double total = 0;
+	LinearAverages *averages = imaqLinearAverages2(image->GetImaqImage(),
+		IMAQ_ROW_AVERAGES, report->boundingRect);
+	for (int i = 0; i < (averages->rowCount); i++)
+	    {
+	    if (yMin[i * (YMINSIZE - 1) / averages->rowCount]
+		    < averages->rowAverages[i] && averages->rowAverages[i]
+		    < yMax[i * (YMAXSIZE - 1) / averages->rowCount])
+		{
+		total++;
+		}
+	    }
+	total = 100 * total / (averages->rowCount); //convert to score 0-100
+	imaqDispose(averages); //let IMAQ dispose of the averages struct
+	return total;
+	}
+    };
+// TODO  tt
+START_ROBOT_CLASS(VisionSample2012)
+;

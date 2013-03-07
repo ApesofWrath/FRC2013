@@ -1,0 +1,15 @@
+
+Test 1:
+frisbee is moving at 1238.185645 Feet per Second as of Sensor1 and 2
+The frisbee is moving at 917.163464 Feet per Second as of Sensor2
+The frisbee is moving at 1238.185645 Feet per Second as of Sensor1 and 2
+The frisbee is moving at 916.424832 Feet per Second as of Sensor2
+The frisbee is moving at 1238.185645 Feet per Second as of Sensor1 and 2
+The frisbee is moving at 2060.825579 Feet per Second as of Sensor2
+The frisbee is moving at 1238.185645 Feet per Second as of Sensor1 and 2
+The frisbee is moving at 1434.408415 Feet per Second as of Sensor2
+The frisbee is moving at 1238.185645 Feet per Second as of Sensor1 and 2
+The frisbee is moving at 660.009900 Feet per Second as of Sensor2
+The frisbee is moving at 1238.185645 Feet per Second as of Sensor1 and 2
+
+Sensors reliable copared to one another.

@@ -1,0 +1,72 @@
+if (FIRST_OPTICAL_SENSOR_VALUE && !First)
+			{
+				//printf("%f\n",(float)DiscTimer->Get());
+				//cout<<DiscTimer->Get()<<endl;// "\n ";
+				if (FIRST_OPTICAL_SENSOR_VALUE == 1)
+				{
+					OpticalSensorTimer->Start();
+					start1 = OpticalSensorTimer->Get();
+					start3 = OpticalSensorTimer->Get();
+				}
+				if (SecondOpticalSensor->Get() == 0)
+				{
+					frisbeeTwo = FIRST_OPTICAL_SENSOR_VALUE;
+					stop1 = OpticalSensorTimer->Get();
+					time1 = stop2 - start2;
+					stop1 = start2 = 0;
+					speed1 = FRISBEE_DIA/time2;
+#ifdef FORTNIGHT
+					printf("The frisbee is moving at %f Miles per Fortnight as of Sensor1\n", CONVERT(speed1));
+#else
+					printf(
+							"The frisbee is moving at %f Feet per Second as of Sensor1\n", 
+							CONVERT(speed1));
+#endif
+				}
+			}
+			First = FIRST_OPTICAL_SENSOR_VALUE;
+			if (SECOND_OPTICAL_SENSOR_VALUE && !Second)
+			{
+				//printf("%f\n",(float)DiscTimer->Get());
+				//cout<<DiscTimer->Get()<<endl;// "\n ";
+				if (SECOND_OPTICAL_SENSOR_VALUE == 1)
+				{
+					OpticalSensorTimer->Start();
+					start2 = OpticalSensorTimer->Get();
+					stop3 = OpticalSensorTimer->Get();
+					time3 = stop3 - start3;
+					stop3 = start3 = 0;
+					speed3 = OPTICAL_SENSOR_DISTANCE/time3;
+#ifdef FORTNIGHT
+					printf("The frisbee is moving at %f Miles per Fortnight as of Sensor1 and 2\n", CONVERT(speed3));
+#else
+					printf(
+							"The frisbee is moving at %f Feet per Second as of Sensor1 and 2\n", 
+							CONVERT(speed3));
+#endif
+				}
+				if (SECOND_OPTICAL_SENSOR_VALUE == 0)
+				{
+					frisbeeTwo = SECOND_OPTICAL_SENSOR_VALUE;
+					stop2 = OpticalSensorTimer->Get();
+					time2 = stop2 - start2;
+					stop2 = start2 = 0;
+					speed2 = FRISBEE_DIA/time2;
+#ifdef FORTNIGHT
+					printf("The frisbee is moving at %f Miles per Fortnight as of Sensor2\n", CONVERT(speed2));
+#else
+					printf(
+							"The frisbee is moving at %f Feet per Second as of Sensor2\n", 
+							CONVERT(speed2));
+#endif
+				}
+			}
+
+			Second = SECOND_OPTICAL_SENSOR_VALUE;
+
+			if (!FIRST_OPTICAL_SENSOR_VALUE && !SECOND_OPTICAL_SENSOR_VALUE)
+			{
+				OpticalSensorTimer->Stop();
+				OpticalSensorTimer->Reset();
+			}
+#endif
