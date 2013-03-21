@@ -88,6 +88,8 @@ Any Button : enable the wheel
 #define XMINSIZE 24
 #define YMAXSIZE 24
 #define YMINSIZE 48
+//Todo
+//insert desciption of arrays below
 const double xMax[XMAXSIZE] = { 1, 1, 1, 1, .5, .5, .5, .5, .5, .5, .5, .5, .5,
 		.5, .5, .5, .5, .5, .5, .5, 1, 1, 1, 1 };
 const double xMin[XMINSIZE] = { .4, .6, .1, .1, .1, .1, .1, .1, .1, .1, .1, .1,
@@ -137,8 +139,8 @@ const double yMin[YMINSIZE] = { .4, .6, .05, .05, .05, .05, .05, .05, .05, .05,
 #define DRIVE_MOTOR_F_R		6
 #define DRIVE_MOTOR_B_R		5
 
-#define SHOOTER_MOTOR_LIFT	3
-#define SHOOTER_MOTOR_SHOOT	4
+#define SHOOTER_MOTOR_LEFT	3
+#define SHOOTER_MOTOR_RIGHT	4
 
 #define MOTOR_MAX -1.0f // motor gearing reverses motor
 #define MOTOR_STOP 0.0f
@@ -300,8 +302,8 @@ public:
 		ShooterStick=new Joystick(JOYSTICK3);
 		Wheel = new Joystick(JOYSTICK4);
 
-		ShooterMotorLeft=new MOTOR_CONTROLLER(SHOOTER_MOTOR_LIFT);
-		ShooterMotorRight= new MOTOR_CONTROLLER(SHOOTER_MOTOR_SHOOT);
+		ShooterMotorLeft=new MOTOR_CONTROLLER(SHOOTER_MOTOR_LEFT);
+		ShooterMotorRight= new MOTOR_CONTROLLER(SHOOTER_MOTOR_RIGHT);
 
 #ifdef OPTICAL_SENSOR_TEST
 		/**************** OPTICAL SENSORS READ TRUE if no frisbee
@@ -738,7 +740,7 @@ public:
 		sampleRate = ds->GetAnalogIn(4);
 		sampleRate = sampleRate / 5;
 		sampleRate = sampleRate * (1.0 - 0.001) + 0.001;
-		if (PIDSampleTimer->Get() > sampleRate) {
+		if (PIDSampleTimer->Get() > sampleRate) {  
 			PIDSampleTimer->Reset();
 			printCount++;
 			oldp = p;
@@ -775,7 +777,77 @@ public:
 		return ShooterMotorLeft->Get();
 	}
 #endif
-
+		void shooterMotorPlotter() {
+			int goalChar;
+			int positionChar;
+			char buffer[20];
+			
+			if(ShooterMotorLeft->Get() < .05) {
+				positionChar = 0;
+			}
+			else if(ShooterMotorLeft->Get() > .05 && ShooterMotorLeft->Get() < .1) {
+				positionChar = 1;
+			}
+			else if(ShooterMotorLeft->Get() > .1 && ShooterMotorLeft->Get() < .15) {
+				positionChar = 2;
+			}
+			else if(ShooterMotorLeft->Get() > .15 && ShooterMotorLeft->Get() < .2) {
+				positionChar = 3;
+			}
+			else if(ShooterMotorLeft->Get() > .2  && ShooterMotorLeft->Get() < .25) {
+				positionChar = 4;
+			}
+			else if(ShooterMotorLeft->Get() > .25 && ShooterMotorLeft->Get() <.3) {
+				positionChar = 5;
+			}
+			else if(ShooterMotorLeft->Get() > .3 && ShooterMotorLeft->Get() <.35) {
+				positionChar = 6;
+			}
+			else if(ShooterMotorLeft->Get() > .35 && ShooterMotorLeft->Get() <.4) {
+				positionChar = 7;
+			}
+			else if(ShooterMotorLeft->Get() > .4 && ShooterMotorLeft->Get() <.45) {
+				positionChar = 8;
+			}
+			else if(ShooterMotorLeft->Get() > .45 && ShooterMotorLeft->Get() <.5) {
+				positionChar = 9;
+			}
+			else if(ShooterMotorLeft->Get() > .5 && ShooterMotorLeft->Get() <.55) {
+				positionChar = 10;
+			}
+			else if(ShooterMotorLeft->Get() > .6 && ShooterMotorLeft->Get() <.65) {
+				positionChar = 11;
+			}
+			else if(ShooterMotorLeft->Get() > .65 && ShooterMotorLeft->Get() <.7) {
+				positionChar = 12;
+			}
+			else if(ShooterMotorLeft->Get() > .7 && ShooterMotorLeft->Get() <.75) {
+				positionChar = 13;
+			}
+			else if(ShooterMotorLeft->Get() > .75 && ShooterMotorLeft->Get() <.8) {
+				positionChar = 14;
+			}			
+			else if(ShooterMotorLeft->Get() > .8 && ShooterMotorLeft->Get() <.85) {
+				positionChar = 15;
+			}
+			else if(ShooterMotorLeft->Get() > .85 && ShooterMotorLeft->Get() <.9) {
+				positionChar = 16;
+			}
+			else if(ShooterMotorLeft->Get() > .9 && ShooterMotorLeft->Get() <.95) {
+				positionChar = 17;
+			}
+			else if(ShooterMotorLeft->Get() > .95 && ShooterMotorLeft->Get() <1.0) {
+				positionChar = 18;
+			}
+			else if(ShooterMotorLeft->Get() > 1.0) {
+				positionChar = 19;
+			}
+			if(positionChar != 0) {
+				buffer[0] = '|';
+			}
+			buffer[positionChar] = '*';
+			cout<<buffer<<endl;
+		}
 #ifdef STATEMACHINE
 	void shooterController() {
 		/* compare entry and exit states, detect when state has changed */
@@ -1233,4 +1305,7 @@ Tested the wheel code on real robot and it works.
 Compile fails with syntax err where I (garyk) left off.
 20130216: JLA, CJ: backed up all the programs into C:\Documents and Settings\Programming\My Documents\FRC2013\Backups.
 Changed PWM's for shooter and solenoids.
+20130321: JLA, CJ: Started a buffer writer to show the Goal, currrent position, and 0 of the PID code
+					NOT FINISHED
+
 #endif
