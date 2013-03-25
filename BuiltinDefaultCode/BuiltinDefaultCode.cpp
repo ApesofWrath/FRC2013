@@ -110,6 +110,8 @@ const double yMin[YMINSIZE] = { .4, .6, .05, .05, .05, .05, .05, .05, .05, .05,
 #define SHOOTER_MOTOR_SPINUP_WAIT     4.0 // seconds, a guess
 #define DUMP_RPM 3000.0
 
+#define PRINT_BUFFER_SIZE 50
+
 // This is here so that if we need to change the motor controllers easily, we can
 #if 1
 #define MOTOR_CONTROLLER Talon
@@ -287,6 +289,10 @@ class RobotDemo : public SimpleRobot {
 	PIDController *pid;
 #endif
 
+char printbuffer [PRINT_BUFFER_SIZE+1];
+
+
+
 	double kP, kI, kD, kF, sampleRate;
 	int rpm, target;
 	enum shooterState
@@ -373,6 +379,15 @@ public:
 		shooterTimer->Start();
 
 		rpm = target = 0;
+		
+		int printindex;
+		for(printindex=0; printindex<PRINT_BUFFER_SIZE; printindex++)
+		{
+			printbuffer[printindex]=' ';
+		}
+		
+		printbuffer[PRINT_BUFFER_SIZE]='\0';
+		
 		GetWatchdog().SetExpiration(0.5);
 	}
 
@@ -740,7 +755,7 @@ public:
 		sampleRate = ds->GetAnalogIn(4);
 		sampleRate = sampleRate / 5;
 		sampleRate = sampleRate * (1.0 - 0.001) + 0.001;
-		if (PIDSampleTimer->Get() > sampleRate) {  
+		if (PIDSampleTimer->Get() > sampleRate) {
 			PIDSampleTimer->Reset();
 			printCount++;
 			oldp = p;
@@ -760,12 +775,60 @@ public:
 #endif
 #if defined(PRINT) && defined(HOMEBREWPID) && 1
 			if ((printCount % 4) == 0) {
+#if 0
 				printf("Target RPM: %i\nTarget: %f%%", RPM, RPM/MAX_RPM*100.0);
 				printf("\nPID=%1.4f\n", p);
 				printf("P: %f, I: %f, D: %f\n", P, I, D);
 				printf("Error: %f\n", error);
 				printf("\nMotor RPM =%7lf\n", (double)rpm);
 				printf("Motor Speed: %f\n", ShooterMotorLeft->Get());
+#endif
+				cout<<"Interval:"<<sampleRate<<"\t";
+				printbuffer[0] = '|';
+				printbuffer[PRINT_BUFFER_SIZE-1] = '|';
+				int placeOfTarget = (int)(PRINT_BUFFER_SIZE-1) * target / MAX_RPM;
+				// _ becuase there is two difffernt rpm's
+				int placeOf_rpm = (int)(PRINT_BUFFER_SIZE-1) * rpm / MAX_RPM;
+				
+				if(placeOfTarget <= PRINT_BUFFER_SIZE  && placeOfTarget >= 0 ) {
+					printbuffer[placeOfTarget] = 'G';
+				}
+				else if(placeOfTarget > PRINT_BUFFER_SIZE){
+					printbuffer[PRINT_BUFFER_SIZE] = '?';
+				}
+				else {
+					printbuffer[0] = '?';
+				}
+				if(placeOf_rpm <= PRINT_BUFFER_SIZE && placeOf_rpm >= 0) {
+					printbuffer[placeOf_rpm] = '*';	
+				}
+				else if(placeOf_rpm > PRINT_BUFFER_SIZE) {
+					printbuffer[PRINT_BUFFER_SIZE] = '?';
+				}
+				else {
+					printbuffer[0] = '?';
+				}
+				cout<<printbuffer<<endl;
+				
+				//Cleanup
+				if(placeOfTarget <= PRINT_BUFFER_SIZE  && placeOfTarget >= 0 ) {
+					printbuffer[placeOfTarget] = ' ';
+				}
+				else if(placeOfTarget > PRINT_BUFFER_SIZE){
+					printbuffer[PRINT_BUFFER_SIZE] = ' ';
+				}
+				else {
+					printbuffer[0] = ' ';
+				}
+				if(placeOf_rpm <= PRINT_BUFFER_SIZE && placeOf_rpm >= 0) {
+					printbuffer[placeOf_rpm] = ' ';	
+				}
+				else if(placeOf_rpm > PRINT_BUFFER_SIZE) {
+					printbuffer[PRINT_BUFFER_SIZE] = ' ';
+				}
+				else {
+					printbuffer[0] = ' ';
+				}
 			}
 #endif
 			float out = p + ShooterMotorLeft->Get();
@@ -777,77 +840,6 @@ public:
 		return ShooterMotorLeft->Get();
 	}
 #endif
-		void shooterMotorPlotter() {
-			int goalChar;
-			int positionChar;
-			char buffer[20];
-			
-			if(ShooterMotorLeft->Get() < .05) {
-				positionChar = 0;
-			}
-			else if(ShooterMotorLeft->Get() > .05 && ShooterMotorLeft->Get() < .1) {
-				positionChar = 1;
-			}
-			else if(ShooterMotorLeft->Get() > .1 && ShooterMotorLeft->Get() < .15) {
-				positionChar = 2;
-			}
-			else if(ShooterMotorLeft->Get() > .15 && ShooterMotorLeft->Get() < .2) {
-				positionChar = 3;
-			}
-			else if(ShooterMotorLeft->Get() > .2  && ShooterMotorLeft->Get() < .25) {
-				positionChar = 4;
-			}
-			else if(ShooterMotorLeft->Get() > .25 && ShooterMotorLeft->Get() <.3) {
-				positionChar = 5;
-			}
-			else if(ShooterMotorLeft->Get() > .3 && ShooterMotorLeft->Get() <.35) {
-				positionChar = 6;
-			}
-			else if(ShooterMotorLeft->Get() > .35 && ShooterMotorLeft->Get() <.4) {
-				positionChar = 7;
-			}
-			else if(ShooterMotorLeft->Get() > .4 && ShooterMotorLeft->Get() <.45) {
-				positionChar = 8;
-			}
-			else if(ShooterMotorLeft->Get() > .45 && ShooterMotorLeft->Get() <.5) {
-				positionChar = 9;
-			}
-			else if(ShooterMotorLeft->Get() > .5 && ShooterMotorLeft->Get() <.55) {
-				positionChar = 10;
-			}
-			else if(ShooterMotorLeft->Get() > .6 && ShooterMotorLeft->Get() <.65) {
-				positionChar = 11;
-			}
-			else if(ShooterMotorLeft->Get() > .65 && ShooterMotorLeft->Get() <.7) {
-				positionChar = 12;
-			}
-			else if(ShooterMotorLeft->Get() > .7 && ShooterMotorLeft->Get() <.75) {
-				positionChar = 13;
-			}
-			else if(ShooterMotorLeft->Get() > .75 && ShooterMotorLeft->Get() <.8) {
-				positionChar = 14;
-			}			
-			else if(ShooterMotorLeft->Get() > .8 && ShooterMotorLeft->Get() <.85) {
-				positionChar = 15;
-			}
-			else if(ShooterMotorLeft->Get() > .85 && ShooterMotorLeft->Get() <.9) {
-				positionChar = 16;
-			}
-			else if(ShooterMotorLeft->Get() > .9 && ShooterMotorLeft->Get() <.95) {
-				positionChar = 17;
-			}
-			else if(ShooterMotorLeft->Get() > .95 && ShooterMotorLeft->Get() <1.0) {
-				positionChar = 18;
-			}
-			else if(ShooterMotorLeft->Get() > 1.0) {
-				positionChar = 19;
-			}
-			if(positionChar != 0) {
-				buffer[0] = '|';
-			}
-			buffer[positionChar] = '*';
-			cout<<buffer<<endl;
-		}
 #ifdef STATEMACHINE
 	void shooterController() {
 		/* compare entry and exit states, detect when state has changed */
