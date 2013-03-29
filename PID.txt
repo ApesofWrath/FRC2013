@@ -115,3 +115,10 @@ float PID(float setpoint) {
 		out = -1;
 	return out;
 }
+#define PRINT_ENCODER        4
+#define SHOOTER_UP           6
+#define SHOOTER_DOWN         7
+#define START_STATE_MACHINE  8
+#define STATE_MACHINE_MANUAL 9
+#define STATE_MACHINE_DUMPa 10
+#define STATE_MACHINE_DUMPb 11

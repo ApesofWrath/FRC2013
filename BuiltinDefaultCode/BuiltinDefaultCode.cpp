@@ -51,6 +51,11 @@ Any Button : enable the wheel
 //#define CAMERA
 #define HOMEBREWPID
 //#define WPILIBPID
+
+#if defined(HOMEBREWPID) && defined(WPILIBPID)
+#error Please disable either HOMEBREWPID or WPILIBPID
+#endif
+
 #define STATEMACHINE
 
 // Working values for HOMEBREWPID:
@@ -90,16 +95,20 @@ Any Button : enable the wheel
 #define YMINSIZE 48
 //Todo
 //insert desciption of arrays below
-const double xMax[XMAXSIZE] = { 1, 1, 1, 1, .5, .5, .5, .5, .5, .5, .5, .5, .5,
-		.5, .5, .5, .5, .5, .5, .5, 1, 1, 1, 1 };
-const double xMin[XMINSIZE] = { .4, .6, .1, .1, .1, .1, .1, .1, .1, .1, .1, .1,
-		.1, .1, .1, .1, .1, .1, .1, .1, .1, .1, 0.6, 0 };
-const double yMax[YMAXSIZE] = { 1, 1, 1, 1, .5, .5, .5, .5, .5, .5, .5, .5, .5,
-		.5, .5, .5, .5, .5, .5, .5, 1, 1, 1, 1 };
-const double yMin[YMINSIZE] = { .4, .6, .05, .05, .05, .05, .05, .05, .05, .05,
+const double xMax[XMAXSIZE] =
+{ 1, 1, 1, 1, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5,
+		1, 1, 1, 1 };
+const double xMin[XMINSIZE] =
+{ .4, .6, .1, .1, .1, .1, .1, .1, .1, .1, .1, .1, .1, .1, .1, .1, .1, .1, .1,
+		.1, .1, .1, 0.6, 0 };
+const double yMax[YMAXSIZE] =
+{ 1, 1, 1, 1, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5,
+		1, 1, 1, 1 };
+const double yMin[YMINSIZE] =
+{ .4, .6, .05, .05, .05, .05, .05, .05, .05, .05, .05, .05, .05, .05, .05, .05,
 		.05, .05, .05, .05, .05, .05, .05, .05, .05, .05, .05, .05, .05, .05,
 		.05, .05, .05, .05, .05, .05, .05, .05, .05, .05, .05, .05, .05, .05,
-		.05, .05, .05, .05, .05, .05, .05, .05, .6, 0 };
+		.05, .05, .6, 0 };
 
 // used to control how often (how many loops) prints happen:
 #define PRINTRATE (30)
@@ -119,6 +128,9 @@ const double yMin[YMINSIZE] = { .4, .6, .05, .05, .05, .05, .05, .05, .05, .05,
 #define MOTOR_CONTROLLER Victor
 #endif
 
+//assuming that both motors are going the same speed in the same direction
+#define GET_MOTOR_SPEED (-ShooterMotorLeft->Get())
+
 // We are doing this so that if the Optical sensor outputs are inverted, then
 // we don't have to switch all of the occurrences of these calls
 #define FIRST_OPTICAL_SENSOR_VALUE  (!FirstOpticalSensor->Get())
@@ -128,8 +140,10 @@ const double yMin[YMINSIZE] = { .4, .6, .05, .05, .05, .05, .05, .05, .05, .05,
 #define SHIFT_UP_STATE 1
 #define SHIFT_OUT		5
 #define SHIFT_IN		6
+
 #define LIFTER_SHIFT_IN		3
 #define LIFTER_SHIFT_OUT	4
+
 #define LOADER_SHIFT_IN		2
 #define LOADER_SHIFT_OUT	1
 
@@ -150,11 +164,14 @@ const double yMin[YMINSIZE] = { .4, .6, .05, .05, .05, .05, .05, .05, .05, .05,
 // here is the definition of all of the Digital IO's
 #define FIRST_OPTICAL_SENSOR	13
 #define SECOND_OPTICAL_SENSOR	14
+#define PRESSURE_SWITCH     4
 
-//hereis where the relays are defined
+
+
+//here is where the relays are defined
 #define COMPRESSOR_RELAY    1
 
-#define PRESSURE_SWITCH     4
+
 
 // Joystick 1 is the center joystick (arcade and tank).
 // Joystick 2 is the left joystick (tank).
@@ -181,19 +198,27 @@ const double yMin[YMINSIZE] = { .4, .6, .05, .05, .05, .05, .05, .05, .05, .05,
 
 // here is where the defines go for buttons
 //Drive Stick Left
-#define DISC_TIMER_RESET	1
+#define DISC_TIMER_RESET	1  // for optical sensors measuring Frisbee speed, not operational 'bot
 
-#define SHIFT_UP_BUTTON		2
-#define SHIFT_DOWN_BUTTON	3
+#define SHIFT_UP_BUTTON		2  //also on Drive Stick Right
+#define SHIFT_DOWN_BUTTON	3  //also on Drive Stick Right
 
-#define ARCADE_BUTTON		8
-#define TANK_BUTTON			9
+#define ARCADE_BUTTON		8  //also on Drive Stick Right
+#define TANK_BUTTON			9  //also on Drive Stick Right
 
-//Drive Stick Right
+
+
+//Drive Stick Right: see Drive Stick Left!
 
 // Shooter Stick
-#define SHOOTER_ON			3
-#define SHOOTER_OFF			2
+
+#define PRINT_ENCODER        4
+#define SHOOTER_UP           6
+#define SHOOTER_DOWN         7
+#define START_STATE_MACHINE  8
+#define STATE_MACHINE_MANUAL 9
+#define STATE_MACHINE_DUMPa 10
+#define STATE_MACHINE_DUMPb 11
 
 //TODO: also using ShooterStick Z for shooting!
 #if defined(HOMEBREWPID) || defined (WPILIBPID)
@@ -201,6 +226,7 @@ const double yMin[YMINSIZE] = { .4, .6, .05, .05, .05, .05, .05, .05, .05, .05,
 //#define kI (1 - DriveStickR->GetZ())
 //#define kD (1 - ShooterStick->GetZ())
 //#define kF 1
+#define kPID_RANGE .001 + (5.0 - .001)
 #endif
 
 #define INpS_TO_FpS(a) ((a)/12.0)
@@ -218,10 +244,12 @@ const double yMin[YMINSIZE] = { .4, .6, .05, .05, .05, .05, .05, .05, .05, .05,
 
 #define MAX_RPM 5000.0
 
-class RobotDemo : public SimpleRobot {
+class RobotDemo : public SimpleRobot
+{
 #ifdef VISIONSYSTEM
 	//Structure to represent the scores for the various tests used for target identification
-	struct Scores {
+	struct Scores
+	{
 		double rectangularity;
 		double aspectRatioInner;
 		double aspectRatioOuter;
@@ -231,7 +259,8 @@ class RobotDemo : public SimpleRobot {
 	static const char NON_GOAL = 0;
 	static const char MID_GOAL = 1;
 	static const char TOP_GOAL = 2;
-	struct FinalReports {
+	struct FinalReports
+	{
 		ParticleAnalysisReport report;
 		// High middle or low goal
 		char type;
@@ -289,9 +318,7 @@ class RobotDemo : public SimpleRobot {
 	PIDController *pid;
 #endif
 
-char printbuffer [PRINT_BUFFER_SIZE+1];
-
-
+	char printbuffer [2][PRINT_BUFFER_SIZE+1];
 
 	double kP, kI, kD, kF, sampleRate;
 	int rpm, target;
@@ -302,7 +329,8 @@ char printbuffer [PRINT_BUFFER_SIZE+1];
 	Timer *shooterTimer;
 
 public:
-	RobotDemo() {
+	RobotDemo()
+	{
 		DriveStickL=new Joystick(JOYSTICK1);
 		DriveStickR=new Joystick(JOYSTICK2);
 		ShooterStick=new Joystick(JOYSTICK3);
@@ -379,19 +407,12 @@ public:
 		shooterTimer->Start();
 
 		rpm = target = 0;
-		
-		int printindex;
-		for(printindex=0; printindex<PRINT_BUFFER_SIZE; printindex++)
-		{
-			printbuffer[printindex]=' ';
-		}
-		
-		printbuffer[PRINT_BUFFER_SIZE]='\0';
-		
+
 		GetWatchdog().SetExpiration(0.5);
 	}
 
-	void Autonomous() {
+	void Autonomous()
+	{
 		cout<<"############AutomousStart######################\n";
 #ifdef VISIONSYSTEM
 #ifdef CAMERA
@@ -407,7 +428,8 @@ public:
 	/**
 	 * This function is called once each time the robot enters operator control.
 	 */
-	void OperatorControl() {
+	void OperatorControl()
+	{
 #ifdef BOTDRIVEBUTTON
 		enum
 		{
@@ -472,16 +494,20 @@ public:
 #endif
 		GetWatchdog().SetEnabled(true);
 
-		while (IsOperatorControl()) {
+		while (IsOperatorControl())
+		{
 			// give cRIO time for housekeeping
 			Wait(0.005f);
 			count++;
 			GetWatchdog().Feed();
 
-			if (ShooterStick->GetRawButton(6)) {
+			// This controls whether the shooter is angled up or down
+			if (ShooterStick->GetRawButton(SHOOTER_UP))
+			{
 				shooterAngleController->Set(DoubleSolenoid::kReverse);
 			}
-			if (ShooterStick->GetRawButton(7)) {
+			if (ShooterStick->GetRawButton(SHOOTER_DOWN))
+			{
 				shooterAngleController->Set(DoubleSolenoid::kForward);
 			}
 #ifdef STATEMACHINE
@@ -503,13 +529,15 @@ public:
 			dslcd->UpdateLCD();
 #ifdef TIMERS
 
-			if (DriveStickL->GetRawButton(DISC_TIMER_RESET)) {
+			if (DriveStickL->GetRawButton(DISC_TIMER_RESET))
+			{
 				DiscTimer->Reset();
 			}
 #endif
 			// cout<<FirstOpticalSensor->Get()<<"\n";
 #ifdef ENCODERS
-			if (ShooterStick->GetRawButton(4)) {
+			if (ShooterStick->GetRawButton(PRINT_ENCODER))
+			{
 				cout<<encoderShooterMotor-> Get()<<endl;
 			}
 #endif
@@ -611,21 +639,25 @@ public:
 			//}
 #ifdef BOTDRIVEBUTTON
 			if (DriveStickL->GetRawButton(TANK_BUTTON)
-					|| DriveStickR->GetRawButton(TANK_BUTTON)) {
+					|| DriveStickR->GetRawButton(TANK_BUTTON))
+			{
 				driveMode = kTank;
 				cout<<"Tank Selected"<<endl;
 			}
 			if (DriveStickL->GetRawButton(ARCADE_BUTTON)
-					|| DriveStickR->GetRawButton(ARCADE_BUTTON)) {
+					|| DriveStickR->GetRawButton(ARCADE_BUTTON))
+			{
 				driveMode = kArcade;
 				cout << "Arcade Selected" << endl;
 			}
 			if (Wheel->GetRawButton(1) ||Wheel->GetRawButton(2)
-					||Wheel->GetRawButton(3) || Wheel->GetRawButton(6)) {
+					||Wheel->GetRawButton(3) || Wheel->GetRawButton(6))
+			{
 				driveMode = kWheel;
 				cout<<"Wheel Selected"<<endl;
 			}
-			if (driveMode == kWheel) {
+			if (driveMode == kWheel)
+			{
 				drive->ArcadeDrive(DriveStickL->GetY(), Wheel->GetX());
 				/*drive->SetLeftRightMotorOutputs(wheelDriveScale(Wheel->GetX(),
 				 DriveStickL->GetY(), false), wheelDriveScale(
@@ -640,22 +672,29 @@ public:
 				 drive->SetLeftRightMotorOutputs(-0.75f, 0.75f);
 				 }*/
 			}
-			if (driveMode == kArcade) {
+			if (driveMode == kArcade)
+			{
 				drive->ArcadeDrive(DriveStickL);
 			}
-			if (driveMode == kTank) {
+			if (driveMode == kTank)
+			{
 				drive->TankDrive(DriveStickL, DriveStickR);
 			}
 			//assigns tank, arcade, or wheel mode to robot when you press buttons.;
 #endif
 #ifdef SHIFTERS
 			if (DriveStickL->GetRawButton(SHIFT_UP_BUTTON)
-					|| DriveStickR->GetRawButton(SHIFT_UP_BUTTON)) {
+					|| DriveStickR->GetRawButton(SHIFT_UP_BUTTON))
+			{
 				shift->Set(DoubleSolenoid::kForward);
-			} else if (DriveStickL->GetRawButton(SHIFT_DOWN_BUTTON)
-					|| DriveStickR->GetRawButton(SHIFT_UP_BUTTON)) {
+			}
+			else if (DriveStickL->GetRawButton(SHIFT_DOWN_BUTTON)
+					|| DriveStickR->GetRawButton(SHIFT_DOWN_BUTTON))
+			{
 				shift->Set(DoubleSolenoid::kReverse);
-			} else {
+			}
+			else
+			{
 				shift->Set(DoubleSolenoid::kOff);
 			}
 #endif
@@ -704,17 +743,20 @@ public:
 				printf("Button %d = %1d ", i, Wheel->GetRawButton(i));
 			}
 #endif
-			if (count++ >= PRINTRATE) {
+			if (count++ >= PRINTRATE)
+			{
 				count = 0;
 			}
 		} // while is operator control
 	} // OperatorControl()
 
-	void setShooterMotors(float desiredspeed) {
+	void setShooterMotors(float desiredspeed)
+	{
 		ShooterMotorLeft->Set(desiredspeed);
 		ShooterMotorRight->Set(desiredspeed);
 	}
-	int getShooterWheelRPM() {
+	int getShooterWheelRPM()
+	{
 		double time = RPMTimer->Get() - prevTime;
 		int ticks = encoderShooterMotor->Get() - prevEnc;
 		prevEnc = encoderShooterMotor->Get();
@@ -722,7 +764,8 @@ public:
 		return (int)fabs((ticks / time)*60.0/128.0*60.0/24.0);
 	}
 #ifdef HOMEBREWPID
-	float PID(float setpoint) {
+	float PID(float setpoint)
+	{
 		setpoint /= MAX_RPM;
 		float preverror = error;
 		//float current = encoderShooterMotor->GetRate() / MAX_RPM;
@@ -746,16 +789,21 @@ public:
 			out = -1;
 		return out;
 	}
-	float regulateMotors(int RPM, bool setMotors) {
+	float regulateMotors(int RPM, bool setMotors)
+	{
 		RPM = abs(RPM);
 		target = RPM;
 		kP = ds->GetAnalogIn(1);
 		kI = ds->GetAnalogIn(2);
 		kD = ds->GetAnalogIn(3);
 		sampleRate = ds->GetAnalogIn(4);
+		// make samplerate on a scale from 0-1
 		sampleRate = sampleRate / 5;
-		sampleRate = sampleRate * (1.0 - 0.001) + 0.001;
-		if (PIDSampleTimer->Get() > sampleRate) {
+		// makes sampleRate in range .001 - 1.0 
+		sampleRate = sampleRate * (.001 + (1.0 - .001));
+
+		if (PIDSampleTimer->Get() > sampleRate)
+		{
 			PIDSampleTimer->Reset();
 			printCount++;
 			oldp = p;
@@ -774,7 +822,8 @@ public:
 			 }*/
 #endif
 #if defined(PRINT) && defined(HOMEBREWPID) && 1
-			if ((printCount % 4) == 0) {
+			if ((printCount % 1) == 0)
+			{
 #if 0
 				printf("Target RPM: %i\nTarget: %f%%", RPM, RPM/MAX_RPM*100.0);
 				printf("\nPID=%1.4f\n", p);
@@ -782,66 +831,126 @@ public:
 				printf("Error: %f\n", error);
 				printf("\nMotor RPM =%7lf\n", (double)rpm);
 				printf("Motor Speed: %f\n", ShooterMotorLeft->Get());
+#else
+				printGraphs();
 #endif
-				cout<<"Interval:"<<sampleRate<<"\t";
-				printbuffer[0] = '|';
-				printbuffer[PRINT_BUFFER_SIZE-1] = '|';
-				int placeOfTarget = (int)(PRINT_BUFFER_SIZE-1) * target / MAX_RPM;
-				// _ becuase there is two difffernt rpm's
-				int placeOf_rpm = (int)(PRINT_BUFFER_SIZE-1) * rpm / MAX_RPM;
-				
-				if(placeOfTarget <= PRINT_BUFFER_SIZE  && placeOfTarget >= 0 ) {
-					printbuffer[placeOfTarget] = 'G';
-				}
-				else if(placeOfTarget > PRINT_BUFFER_SIZE){
-					printbuffer[PRINT_BUFFER_SIZE] = '?';
-				}
-				else {
-					printbuffer[0] = '?';
-				}
-				if(placeOf_rpm <= PRINT_BUFFER_SIZE && placeOf_rpm >= 0) {
-					printbuffer[placeOf_rpm] = '*';	
-				}
-				else if(placeOf_rpm > PRINT_BUFFER_SIZE) {
-					printbuffer[PRINT_BUFFER_SIZE] = '?';
-				}
-				else {
-					printbuffer[0] = '?';
-				}
-				cout<<printbuffer<<endl;
-				
-				//Cleanup
-				if(placeOfTarget <= PRINT_BUFFER_SIZE  && placeOfTarget >= 0 ) {
-					printbuffer[placeOfTarget] = ' ';
-				}
-				else if(placeOfTarget > PRINT_BUFFER_SIZE){
-					printbuffer[PRINT_BUFFER_SIZE] = ' ';
-				}
-				else {
-					printbuffer[0] = ' ';
-				}
-				if(placeOf_rpm <= PRINT_BUFFER_SIZE && placeOf_rpm >= 0) {
-					printbuffer[placeOf_rpm] = ' ';	
-				}
-				else if(placeOf_rpm > PRINT_BUFFER_SIZE) {
-					printbuffer[PRINT_BUFFER_SIZE] = ' ';
-				}
-				else {
-					printbuffer[0] = ' ';
-				}
 			}
-#endif
 			float out = p + ShooterMotorLeft->Get();
-			if (setMotors) {
+			if (setMotors)
+			{
 				setShooterMotors(out);
 			}
 			return out;
 		}
 		return ShooterMotorLeft->Get();
+#endif
+	}
+#endif
+#if defined(PRINT) && defined(HOMEBREWPID) && 1
+	void printGraphs()
+	{
+		//cout<<"Interval:"<<sampleRate<<"\t";
+		initializePrintBuffers();
+		int placeOfTarget = (int)((PRINT_BUFFER_SIZE-1) * target / MAX_RPM);
+
+		// Why is this comment here?
+		//  // _ becuase there are two different rpm's
+		int placeOfrpm = (int)((PRINT_BUFFER_SIZE - 1) * getShooterWheelRPM()
+				/ MAX_RPM + .5);
+
+		int placeOfPWM = (int)((PRINT_BUFFER_SIZE - 1)
+				* fabs(GET_MOTOR_SPEED) + .5);
+
+		int placeOfP = (int)((PRINT_BUFFER_SIZE - 1) * kP / kPID_RANGE);
+			int placeOfI = (int)((PRINT_BUFFER_SIZE - 1) * kI / kPID_RANGE);
+		int placeOfD = (int)((PRINT_BUFFER_SIZE - 1) * kD / kPID_RANGE);
+			
+		
+		printNumberInBuffer(placeOfTarget, 'T', 0);
+		printNumberInBuffer(placeOfrpm, 'R', 0);
+		printNumberInBuffer(placeOfPWM, 'W', 0);
+
+		printNumberInBuffer(placeOfP, 'P', 1);
+		printNumberInBuffer(placeOfI, 'I', 1);
+		printNumberInBuffer(placeOfD, 'D', 1);
+
+		printf("|%s|\n", printbuffer[0]);
+		printf("|%s|\n", printbuffer[1]);
+		printf("\n");
+
+#if 0
+		//Cleanup
+		if(placeOfTarget <= PRINT_BUFFER_SIZE && placeOfTarget >= 0 )
+		{
+			printbuffer[placeOfTarget] = ' ';
+		}
+		else if(placeOfTarget> PRINT_BUFFER_SIZE)
+		{
+			printbuffer[PRINT_BUFFER_SIZE] = ' ';
+		}
+		else
+		{
+			printbuffer[0] = ' ';
+		}
+		if(placeOfrpm <= PRINT_BUFFER_SIZE && placeOfrpm >= 0)
+		{
+			printbuffer[placeOfrpm] = ' ';
+		}
+		else if(placeOfrpm> PRINT_BUFFER_SIZE)
+		{
+			printbuffer[PRINT_BUFFER_SIZE] = ' ';
+		}
+		else
+		{
+			printbuffer[0] = ' ';
+		}
+#else 
+		int q = 0;
+		for (; q < PRINT_BUFFER_SIZE; q++)
+		{
+			printbuffer[0][q] = ' ';
+			printbuffer[1][q] = ' ';
+		}
+#endif
+	}
+	void printNumberInBuffer(int value, char character, int index)
+	{
+		if ((value <= (PRINT_BUFFER_SIZE-1)) && (value >= 0 ))
+		{
+			printbuffer[index][value] = character;
+		}
+		// it's out of bounds to the left or right, draw a '?'
+		else if (value > (PRINT_BUFFER_SIZE-1))
+		{
+			// Print the lower case of the letter if it is out of bounds
+			printbuffer[index][PRINT_BUFFER_SIZE-1] = character + ('a' - 'A');
+		}
+		else
+		{
+			printbuffer[index][0] = character + ('a' - 'A');
+		}
+	}
+	void initializePrintBuffers()
+	{
+		int printindex;
+		for (printindex=0; printindex<PRINT_BUFFER_SIZE; printindex++)
+		{
+			printbuffer[0][printindex]=' ';
+			printbuffer[1][printindex]=' ';
+		}
+
+		printbuffer[0][PRINT_BUFFER_SIZE]='\0';
+		printbuffer[1][PRINT_BUFFER_SIZE]='\0';
+
+		/*printbuffer[0][0] = '|';
+		printbuffer[1][0] = '|';
+		printbuffer[0][PRINT_BUFFER_SIZE-1] = '|';
+		printbuffer[1][PRINT_BUFFER_SIZE-1] = '|';*/
 	}
 #endif
 #ifdef STATEMACHINE
-	void shooterController() {
+	void shooterController()
+	{
 		/* compare entry and exit states, detect when state has changed */
 		shooterState oldState;
 		//static unsigned int stateChangeCount=0;
@@ -850,10 +959,12 @@ public:
 		static shooterMode shootingMode = noMode;
 		static double shooterMotorSpinupSpeed;
 		oldState = shootingState;
-		if (ShooterStick->GetRawButton(8)) {
+		if (ShooterStick->GetRawButton(START_STATE_MACHINE ))
+		{
 			shootingState = start;
 		}
-		switch (shootingState) {
+		switch (shootingState)
+		{
 		default:
 			shootingState = start;
 			break;
@@ -866,14 +977,16 @@ public:
 			break;
 
 		case idle:
-			cout<<"Idling"<<endl;
+			//cout<<"Idling"<<endl;
 			// stop the motor when we aren't shooting
 			setShooterMotors(MOTOR_STOP);
-			if (ShooterStick->GetRawButton(9)) {
+			if (ShooterStick->GetRawButton(STATE_MACHINE_MANUAL))
+			{
 				shootingState = setManualShoot;
 			}
-			if (ShooterStick->GetRawButton(10)
-					|| ShooterStick->GetRawButton(11)) {
+			if (ShooterStick->GetRawButton(STATE_MACHINE_DUMPa)
+					|| ShooterStick->GetRawButton(STATE_MACHINE_DUMPb))
+			{
 				shootingState = setDumpShoot;
 			}
 			break;
@@ -891,9 +1004,10 @@ public:
 
 		case shooterCheckTrigger:
 			//Buttton One is Trigger
-			cout<<"checking trigger"<<endl;
+			//cout<<"checking trigger"<<endl;
 			regulateMotors((int)(MAX_RPM*-(1-ShooterStick->GetZ())/2), true);
-			if (ShooterStick->GetTrigger()) {
+			if (ShooterStick->GetTrigger())
+			{
 				shootingState = extendCylinder;
 			}
 			/*else {
@@ -903,7 +1017,8 @@ public:
 
 		case startShooterMotor:
 			regulateMotors((int)DUMP_RPM, true);
-			if (shootingMode == dump) {
+			if (shootingMode == dump)
+			{
 				shooterTimer->Reset();
 				shootingState = shooterMotorSpinupWait;
 			}
@@ -914,26 +1029,29 @@ public:
 			 ** pulling trigger:
 			 * */
 
-			if (shootingMode == manualShoot) {
+			if (shootingMode == manualShoot)
+			{
 				shootingState = shooterCheckTrigger;
 			}
 			break;
 
 		case shooterMotorSpinupWait:
-			if (shooterTimer->Get() >= SHOOTER_MOTOR_SPINUP_WAIT) {
+			if (shooterTimer->Get() >= SHOOTER_MOTOR_SPINUP_WAIT)
+			{
 				shootingState = extendCylinder;
 			}
 			break;
 
 		case extendCylinder:
-			cout<<"firing"<<endl;
+			//cout<<"firing"<<endl;
 			loaderSolenoid->Set(DoubleSolenoid::kReverse);//TODO forward?
 			shooterTimer->Reset();
 			shootingState = extendCylinderWait;
 			break;
 
 		case extendCylinderWait:
-			if (shooterTimer->Get() >= SHOOTER_CYLINDER_EXTEND_TIME) {
+			if (shooterTimer->Get() >= SHOOTER_CYLINDER_EXTEND_TIME)
+			{
 				shooterTimer->Reset();
 				shootingState=retractCylinder;
 			}
@@ -946,12 +1064,15 @@ public:
 			break;
 
 		case retractCylinderWait:
-			if (shooterTimer->Get() >= SHOOTER_CYLINDER_RETRACT_TIME) {
+			if (shooterTimer->Get() >= SHOOTER_CYLINDER_RETRACT_TIME)
+			{
 				shooterTimer->Reset();
-				if (shootingMode == dump) {
+				if (shootingMode == dump)
+				{
 					shootingState = checkFrisbeeCount;
 				}
-				if (shootingMode == manualShoot) {
+				if (shootingMode == manualShoot)
+				{
 					shootingState = shooterCheckTrigger;
 				}
 			}
@@ -959,16 +1080,19 @@ public:
 
 		case checkFrisbeeCount:
 			--remainingFrisbees;
-			cout<<"remaing frisbees"<<remainingFrisbees<<endl;
-			if (remainingFrisbees <= 0) {
+			//cout<<"remaing frisbees"<<remainingFrisbees<<endl;
+			if (remainingFrisbees <= 0)
+			{
 				remainingFrisbees = 4;
 				shootingState = stopShooterMotor;
-			} else {
+			}
+			else
+			{
 				shootingState = extendCylinder;
 			}
 			break;
 		case stopShooterMotor:
-			cout<<"stopping";
+			//cout<<"stopping";
 			setShooterMotors(MOTOR_STOP);
 			shootingState = idle;
 			break;
@@ -1002,10 +1126,12 @@ public:
 	 * @return The estimated distance to the target in Inches.
 	 */
 
-	void visionSystem(void) {
+	void visionSystem(void)
+	{
 		Threshold threshold(60, 100, 90, 255, 20, 255); //HSV threshold criteria, ranges are in that order ie. Hue is 60-100 ParticleFilterCriteria2
-		ParticleFilterCriteria2 criteria[] = { { IMAQ_MT_AREA, AREA_MINIMUM,
-				65535, false, false } };
+		ParticleFilterCriteria2 criteria[] =
+		{
+		{ IMAQ_MT_AREA, AREA_MINIMUM, 65535, false, false } };
 		VisionTimer->Start();
 		ColorImage *image;
 		Scores *scores;
@@ -1030,7 +1156,8 @@ public:
 		scores = new Scores[reports->size()];
 
 		//Iterate through each particle, scoring it and determining whether it is a target or not
-		for (unsigned i = 0; i < reports->size(); i++) {
+		for (unsigned i = 0; i < reports->size(); i++)
+		{
 			ParticleAnalysisReport *report = &(reports->at(i));
 
 			scores[i].rectangularity = scoreRectangularity(report);
@@ -1041,7 +1168,8 @@ public:
 			scores[i].xEdge = scoreXEdge(thresholdImage, report);
 			scores[i].yEdge = scoreYEdge(thresholdImage, report);
 
-			if (scoreCompare(scores[i], false)) {
+			if (scoreCompare(scores[i], false))
+			{
 				printf(
 						"particle: %d  is a High Goal  centerX: %f  centerY: %f \n",
 						i, report->center_mass_x_normalized,
@@ -1050,7 +1178,9 @@ public:
 						report, false));
 				finalreports[i]->report = *report;
 				finalreports[i]->type = TOP_GOAL;
-			} else if (scoreCompare(scores[i], true)) {
+			}
+			else if (scoreCompare(scores[i], true))
+			{
 				printf(
 						"particle: %d  is a Middle Goal  centerX: %f  centerY: %f \n",
 						i, report->center_mass_x_normalized,
@@ -1059,7 +1189,9 @@ public:
 						report, true));
 				finalreports[i]->report = *report;
 				finalreports[i]->type = MID_GOAL;
-			} else {
+			}
+			else
+			{
 				printf(
 						"particle: %d  is not a goal  centerX: %f  centerY: %f \n",
 						i, report->center_mass_x_normalized,
@@ -1089,7 +1221,8 @@ public:
 		VisionTimer->Reset();
 	}
 	double computeDistance(BinaryImage *image, ParticleAnalysisReport *report,
-			bool outer) {
+			bool outer)
+	{
 		double rectShort, height;
 		int targetHeight;
 
@@ -1114,7 +1247,8 @@ public:
 	 * @return The aspect ratio score (0-100)
 	 */
 	double scoreAspectRatio(BinaryImage *image, ParticleAnalysisReport *report,
-			bool outer) {
+			bool outer)
+	{
 		double rectLong, rectShort, idealAspectRatio, aspectRatio;
 		idealAspectRatio = outer ? (62/29) : (62/20); //Dimensions of goal opening + 4 inches on all 4 sides for reflective tape
 
@@ -1124,11 +1258,14 @@ public:
 				IMAQ_MT_EQUIVALENT_RECT_SHORT_SIDE, &rectShort);
 
 		//Divide width by height to measure aspect ratio
-		if (report->boundingRect.width> report->boundingRect.height) {
+		if (report->boundingRect.width> report->boundingRect.height)
+		{
 			//particle is wider than it is tall, divide long by short
 			aspectRatio = 100*(1 -fabs((1 -((rectLong/rectShort)
 					/idealAspectRatio))));
-		} else {
+		}
+		else
+		{
 			//particle is taller than it is wide, divide short by long
 			aspectRatio = 100*(1 -fabs((1 -((rectShort/rectLong)
 					/idealAspectRatio))));
@@ -1145,13 +1282,17 @@ public:
 	 * @return True if the particle meets all limits, false otherwise
 	 */
 
-	bool scoreCompare(Scores scores, bool outer) {
+	bool scoreCompare(Scores scores, bool outer)
+	{
 		bool isTarget = true;
 
 		isTarget &= scores.rectangularity> RECTANGULARITY_LIMIT;
-		if (outer) {
+		if (outer)
+		{
 			isTarget &= scores.aspectRatioOuter> ASPECT_RATIO_LIMIT;
-		} else {
+		}
+		else
+		{
 			isTarget &= scores.aspectRatioInner> ASPECT_RATIO_LIMIT;
 		}
 		isTarget &= scores.xEdge> X_EDGE_LIMIT;
@@ -1167,11 +1308,15 @@ public:
 	 * @param report The Particle Analysis Report for the particle to score
 	 * @return The rectangularity score (0-100)
 	 */
-	double scoreRectangularity(ParticleAnalysisReport *report) {
-		if (report->boundingRect.width*report->boundingRect.height !=0) {
+	double scoreRectangularity(ParticleAnalysisReport *report)
+	{
+		if (report->boundingRect.width*report->boundingRect.height !=0)
+		{
 			return 100*report->particleArea/(report->boundingRect.width
 					*report->boundingRect.height);
-		} else {
+		}
+		else
+		{
 			return 0;
 		}
 	}
@@ -1186,14 +1331,17 @@ public:
 	 * 
 	 * @return The X Edge Score (0-100)
 	 */
-	double scoreXEdge(BinaryImage *image, ParticleAnalysisReport *report) {
+	double scoreXEdge(BinaryImage *image, ParticleAnalysisReport *report)
+	{
 		double total = 0;
 		LinearAverages *averages = imaqLinearAverages2(image->GetImaqImage(),
 				IMAQ_COLUMN_AVERAGES, report->boundingRect);
-		for (int i=0; i < (averages->columnCount); i++) {
+		for (int i=0; i < (averages->columnCount); i++)
+		{
 			if (xMin[i*(XMINSIZE-1)/averages->columnCount]
 					< averages->columnAverages[i]
-					&& averages->columnAverages[i] < xMax[i*(XMAXSIZE-1)/averages->columnCount]) {
+					&& averages->columnAverages[i] < xMax[i*(XMAXSIZE-1)/averages->columnCount])
+			{
 				total++;
 			}
 		}
@@ -1212,13 +1360,16 @@ public:
 	 * 
 	 * @return The Y Edge score (0-100)
 	 */
-	double scoreYEdge(BinaryImage *image, ParticleAnalysisReport *report) {
+	double scoreYEdge(BinaryImage *image, ParticleAnalysisReport *report)
+	{
 		double total = 0;
 		LinearAverages *averages = imaqLinearAverages2(image->GetImaqImage(),
 				IMAQ_ROW_AVERAGES, report->boundingRect);
-		for (int i=0; i < (averages->rowCount); i++) {
+		for (int i=0; i < (averages->rowCount); i++)
+		{
 			if (yMin[i*(YMINSIZE-1)/averages->rowCount] < averages->rowAverages[i]
-					&& averages->rowAverages[i] < yMax[i*(YMAXSIZE-1)/averages->rowCount]) {
+					&& averages->rowAverages[i] < yMax[i*(YMAXSIZE-1)/averages->rowCount])
+			{
 				total++;
 			}
 		}
@@ -1298,6 +1449,6 @@ Compile fails with syntax err where I (garyk) left off.
 20130216: JLA, CJ: backed up all the programs into C:\Documents and Settings\Programming\My Documents\FRC2013\Backups.
 Changed PWM's for shooter and solenoids.
 20130321: JLA, CJ: Started a buffer writer to show the Goal, currrent position, and 0 of the PID code
-					NOT FINISHED
+NOT FINISHED
 
 #endif
