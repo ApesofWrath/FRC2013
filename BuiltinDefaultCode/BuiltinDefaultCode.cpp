@@ -122,7 +122,7 @@ const double yMin[YMINSIZE] =
 #define PRINT_BUFFER_SIZE 50
 
 // This is here so that if we need to change the motor controllers easily, we can
-#if 1
+#if 0
 #define MOTOR_CONTROLLER Talon
 #else
 #define MOTOR_CONTROLLER Victor
@@ -861,9 +861,13 @@ public:
 		int placeOfPWM = (int)((PRINT_BUFFER_SIZE - 1)
 				* fabs(GET_MOTOR_SPEED) + .5);
 
-		int placeOfP = (int)((PRINT_BUFFER_SIZE - 1) * kP / kPID_RANGE);
-			int placeOfI = (int)((PRINT_BUFFER_SIZE - 1) * kI / kPID_RANGE);
-		int placeOfD = (int)((PRINT_BUFFER_SIZE - 1) * kD / kPID_RANGE);
+		//int placeOfP = (int)((PRINT_BUFFER_SIZE - 1) * kP / kPID_RANGE);
+		//int placeOfI = (int)((PRINT_BUFFER_SIZE - 1) * kI / kPID_RANGE);
+		//int placeOfD = (int)((PRINT_BUFFER_SIZE - 1) * kD / kPID_RANGE);
+		
+		int placeOfP = (int)((PRINT_BUFFER_SIZE - 1) * P / kPID_RANGE);
+		int placeOfI = (int)((PRINT_BUFFER_SIZE - 1) * I / kPID_RANGE);
+		int placeOfD = (int)((PRINT_BUFFER_SIZE - 1) * D / kPID_RANGE);
 			
 		
 		printNumberInBuffer(placeOfTarget, 'T', 0);
@@ -1450,5 +1454,5 @@ Compile fails with syntax err where I (garyk) left off.
 Changed PWM's for shooter and solenoids.
 20130321: JLA, CJ: Started a buffer writer to show the Goal, currrent position, and 0 of the PID code
 NOT FINISHED
-
+20130329: JLA, GK: Reimaged Crio
 #endif
